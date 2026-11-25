@@ -89,14 +89,16 @@ async function readText(f, data) {
 // Search terms used when a field gets the focus. Spaces in a term also match no space ("27 °C", "27°C").
 const CONTEXT = { energy_limit: 'BR18', energy_be18: 'BE18', energy_ida: 'IDA', daylight_sda300: 'sDA', heating_load: 'heating load', hours_above_27: '27 °C', time_in_category_2: 'category II', co2_max: 'ppm', floor_area: 'floor area' };
 const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const searchRe = () => { const q = S.q.trim(); return q ? new RegExp(q.split(/\s+/).map(reEsc).join('\\s*'), 'gi') : null; };
 function hits() {
   const el = $('#hits'), f = S.report;
   if (!el || !f) return;
   const q = S.q.trim();
-  if (!q) { el.innerHTML = ''; return; }
+  if (!q) { el.innerHTML = ''; marks(); return; }
   if (!f.pages) { el.innerHTML = '<p class="dim">Reading the text of the report</p>'; return; }
   if (!f.pages.length || f.pages.every((p) => !p.trim())) { el.innerHTML = '<p class="dim">This PDF has no searchable text</p>'; return; }
-  const re = new RegExp(q.split(/\s+/).map(reEsc).join('\\s*'), 'gi'), out = [];
+  const re = searchRe(), out = [];
+  marks();
   let n = 0;
   f.pages.forEach((t, i) => {
     for (const m of t.matchAll(re)) {
@@ -135,6 +137,27 @@ async function draw(doc, d) {
   c.width = Math.round(vp.width); c.height = Math.round(vp.height);
   d.appendChild(c);
   await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  d._items = (await page.getTextContent()).items; d._vp = one;
+  mark(d);
+}
+// Every hit of the search is marked on the drawn pages, in percent of the page so zoom keeps it in place.
+function marks() { document.querySelectorAll('#pages .pg').forEach((d) => { if (d._items) mark(d); }); }
+function mark(d) {
+  d.querySelectorAll('.hl').forEach((x) => x.remove());
+  const re = searchRe();
+  if (!re) return;
+  const W = d._vp.width, H = d._vp.height;
+  for (const it of d._items) {
+    if (!it.str) continue;
+    const t = pdfjs.Util.transform(d._vp.transform, it.transform), fh = Math.hypot(t[2], t[3]), len = it.str.length;
+    for (const m of it.str.matchAll(re)) {
+      const x = t[4] + (it.width * m.index) / len, w = (it.width * m[0].length) / len;
+      const s = document.createElement('span');
+      s.className = 'hl';
+      s.style.cssText = `left:${(x / W) * 100}%;top:${((t[5] - fh) / H) * 100}%;width:${(w / W) * 100}%;height:${(fh * 1.2 / H) * 100}%`;
+      d.appendChild(s);
+    }
+  }
 }
 function current() {
   const box = $('#pages'); if (!box) return 1;

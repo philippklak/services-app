@@ -81,7 +81,8 @@ header nav a.on { color: var(--ink); }
 #panel .bar { height: 46px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-size: 14px; }
 #pages { flex: 1; min-height: 0; overflow: auto; padding: 0 14px 14px; }
 #pages p { font-size: 14px; margin: 8px 0; }
-#pages .pg { background: #fff; margin: 0 auto 10px; }
+#pages .pg { background: #fff; margin: 0 auto 10px; position: relative; }
+#pages .hl { position: absolute; background: rgba(255, 210, 0, 0.45); mix-blend-mode: multiply; pointer-events: none; }
 #pages canvas { display: block; width: 100%; height: auto; }
 #panel .tools { display: flex; align-items: center; gap: 16px; flex: none; }
 #panel .tools button { font-size: 18px; line-height: 1; color: var(--dim); }
