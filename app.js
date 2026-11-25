@@ -9,7 +9,7 @@ import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
 const PAGES = ['files', 'data', 'images', 'export'];
-const S = { files: [], model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, html: true }, pics: null, picsKey: '' };
+const S = { files: [], report: null, model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, html: true }, pics: null, picsKey: '' };
 let api = null;
 document.getElementById('doc-css').textContent = DOC_CSS;
 
@@ -24,6 +24,7 @@ async function engine() {
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const PEN = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2.5 13.5l.6-3L10.8 2.8a1.2 1.2 0 0 1 1.7 0l.7.7a1.2 1.2 0 0 1 0 1.7L5.5 12.9z"/><path d="M9.6 4l2.4 2.4"/></svg>';
+const X = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3l10 10M13 3L3 13"/></svg>';
 const PLUS = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2v12M2 8h12"/></svg>';
 const chk = (on) => `<svg class="chk" role="img" aria-label="${on ? 'selected' : 'not selected'}" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="1" width="14" height="14"/>${on ? '<path d="M4 8.3l2.7 2.7L12 5.2"/>' : ''}</svg>`;
 
@@ -39,9 +40,13 @@ function save() { if (!S.model) return; try { localStorage.setItem(storeKey(S.mo
 const isMEP = (m) => m.elements.filter((e) => e.seg).length >= 10;
 async function addFile(name, size, getBuffer) {
   const f = { name, size, kind: /\.ifc$/i.test(name) ? 'ifc' : /\.pdf$/i.test(name) ? 'pdf' : 'other', status: 'reading' };
-  S.files = S.files.filter((x) => x.name !== name);
+  S.files.filter((x) => x.name === name).forEach(drop);
   S.files.push(f);
   render();
+  if (f.kind === 'pdf') {
+    try { f.url = URL.createObjectURL(new Blob([await getBuffer()], { type: 'application/pdf' })); f.status = 'done'; } catch (e) { f.status = 'error'; }
+    render(); return;
+  }
   if (f.kind !== 'ifc') { f.status = 'done'; render(); return; }
   await new Promise((r) => setTimeout(r, 30));
   try {
@@ -57,6 +62,13 @@ async function addFile(name, size, getBuffer) {
     f.status = 'error';
   }
   render();
+}
+// Removing a file. Removing the MEP model also clears what was read from it.
+function drop(f) {
+  S.files = S.files.filter((x) => x !== f);
+  if (f.url) URL.revokeObjectURL(f.url);
+  if (S.report === f) S.report = null;
+  if (f.kind === 'mep') { S.model = null; S.state = emptyState(); S.editing = null; S.pics = null; S.prev = null; }
 }
 async function addFiles(list) { for (const f of list) await addFile(f.name, f.size, () => f.arrayBuffer()); }
 
@@ -76,12 +88,12 @@ const noModel = () => block('Model', 'none yet', `<p class="note">Add the MEP mo
 
 function pageFiles() {
   const m = S.model;
-  const used = S.files.filter((f) => f.kind === 'mep').length;
-  const what = (f) => (f.status === 'reading' ? 'reading' : f.status === 'error' ? 'could not be read' : f.kind === 'mep' ? 'services, all values and images' : 'nothing needed');
+  const used = S.files.filter((f) => f.kind === 'mep' || (f.kind === 'pdf' && f.url)).length;
+  const what = (f) => (f.status === 'reading' ? 'reading' : f.status === 'error' ? 'could not be read' : f.kind === 'mep' ? 'services, all values and images' : f.kind === 'pdf' ? 'report, opens next to the data' : 'nothing needed');
   let h = head('Files', 'The IFC models and PDF reports of the project. They are read on this computer and not uploaded. Only what helps the services is taken.');
   h += block('Files', `${used} of ${S.files.length} used`,
     `<button class="fill drop" data-act="choose"><span class="small dim">Drop the models and reports of the project here or choose them</span><b>${S.files.length} ${S.files.length === 1 ? 'file' : 'files'}</b></button>` +
-    S.files.map((f) => row(esc(f.name), what(f), f.kind === 'mep' || f.status === 'reading' ? '' : 'off')).join(''));
+    S.files.map((f, i) => row(esc(f.name), `<span>${what(f)}</span><button class="edit x" data-rmfile="${i}" title="Remove" aria-label="Remove ${esc(f.name)}">${X}</button>`, f.kind === 'mep' || f.kind === 'pdf' || f.status === 'reading' ? '' : 'off')).join(''));
   if (!m) return h;
   h += block('Content', `read in ${(m.ms / 1000).toFixed(1)} s`,
     row('Schema', esc(m.schema || 'unknown')) + row('Elements', fmt(m.elements.length)) + row('Systems', fmt(m.systems.length)) + row('Storeys', fmt(m.storeys.length)));
@@ -114,6 +126,10 @@ function pageData() {
   if (!m) return head('Data', 'Values for the course, from the model and from the report of the team.') + noModel();
   const vals = buildValues(m, S.state), by = Object.fromEntries(vals.map((v) => [v.key, v]));
   let h = head('Data', `Project ${esc(m.id)}. Grey fields are yours to fill from the report. Everything else was read from the model and can be corrected.`);
+  const reports = S.files.filter((f) => f.kind === 'pdf' && f.url);
+  h += block('Report', reports.length ? 'opens next to the fields' : 'none yet', reports.length
+    ? reports.map((f) => row(esc(f.name), `<button class="edit" style="margin-left:0;padding-left:0" data-report="${S.files.indexOf(f)}">${S.report === f ? 'Close' : 'Open next to the fields'}</button>`)).join('')
+    : `<p class="note">Add the PDF report of the team on the page Files to read the values next to the fields.</p>`);
   const req = REQUIRED.map((d) => by[d.key]);
   h += block('Required', `${req.filter((v) => !isEmpty(v.value)).length} of ${req.length} complete`, req.map((v) => {
     if (v.def.kind === 'model') return modelRow(v, esc(v.label));
@@ -173,7 +189,19 @@ function render() {
   document.querySelectorAll('header nav a').forEach((x) => x.classList.toggle('on', x.dataset.s === page));
   $('#main').innerHTML = { files: pageFiles, data: pageData, images: pageImages, export: pageExport }[page]();
   if (fk) { const el = document.querySelector(`[data-k="${fk}"]`); if (el) el.focus(); }
+  panel();
   scaleThumbs();
+}
+// The report sits in a fixed panel outside the page, so it is not reloaded when the page changes.
+function panel() {
+  const f = page === 'data' && S.report && S.files.includes(S.report) ? S.report : null, el = $('#panel');
+  document.body.classList.toggle('split', !!f);
+  if (!f) { el.hidden = true; return; }
+  el.hidden = false;
+  if (el.dataset.url !== f.url) {
+    el.dataset.url = f.url;
+    el.innerHTML = `<div class="bar"><span>${esc(f.name)}</span><button class="x" data-act="closereport" aria-label="Close the report">${X}</button></div><iframe title="Report" src="${f.url}#navpanes=0&view=FitH"></iframe>`;
+  }
 }
 function scaleThumbs() {
   document.querySelectorAll('.thumb').forEach((t) => { const s = t.querySelector('.sheet'); if (s) s.style.transform = `scale(${t.clientWidth / 1280})`; });
@@ -233,6 +261,9 @@ document.addEventListener('click', (e) => {
   else if (d.act === 'reset') { if (!confirm('Reset all inputs and corrections of this project?')) return; S.state = emptyState(); S.pics = null; }
   else if (d.act === 'download') { download(); return; }
   else if (d.act === 'print') { print(); return; }
+  else if (d.act === 'closereport') { S.report = null; render(); return; }
+  else if (d.report) { const f = S.files[+d.report]; S.report = S.report === f ? null : f; render(); return; }
+  else if (d.rmfile) { drop(S.files[+d.rmfile]); render(); return; }
   else if (d.editk) S.editing = d.editk;
   else if (d.reset) { delete st.edits[d.reset]; S.editing = null; }
   else if (d.opt) st.optional[d.opt] = st.optional[d.opt] === false;

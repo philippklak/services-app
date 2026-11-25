@@ -74,8 +74,17 @@ header nav a.on { color: var(--ink); }
 .btn.light { background: var(--surface); color: var(--ink); }
 .note { grid-column: 4 / span 5; margin: 0; align-self: center; color: var(--dim); font-size: 14px; }
 #print { display: none; }
+.x { display: inline-flex; align-items: center; color: var(--dim); }
+.x:hover { color: var(--ink); }
+#panel { position: fixed; top: 0; right: 0; bottom: 0; width: 46vw; background: var(--surface); display: flex; flex-direction: column; }
+#panel[hidden] { display: none; }
+#panel .bar { height: 46px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-size: 14px; }
+#panel iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+body.split .page { max-width: none; margin: 0 46vw 0 0; }
+body.split .row .l { height: auto; min-height: 46px; white-space: normal; padding: 6px 0; }
 @media (max-width: 760px) { .grid > *, .row .l, .row .v, .seg, .btn, .note { grid-column: 1 / -1 !important; } .sec { grid-row: auto; padding-bottom: 8px; } .head h1 { font-size: 44px; } }
 @media print {
+  #panel { display: none !important; }
   @page { size: 1280px 720px; margin: 0; }
   html { overflow: visible; }
   .page { display: none; }
@@ -95,6 +104,7 @@ header nav a.on { color: var(--ink); }
   </header>
   <main id="main"></main>
 </div>
+<div id="panel" hidden></div>
 <div id="print" class="doc"></div>
 <input id="file" type="file" accept=".ifc,.pdf" multiple hidden>
 <script type="module" src="./app.js"></script>
