@@ -80,6 +80,14 @@ header nav a.on { color: var(--ink); }
 #panel[hidden] { display: none; }
 #panel .bar { height: 46px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-size: 14px; }
 #panel iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+#panel .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 12px; }
+#panel .find { padding: 0 14px 8px; flex: none; }
+#panel .find input { width: 100%; height: 38px; background: #fff; padding: 0 10px; font-size: 14px; }
+#hits { flex: none; max-height: 34vh; overflow-y: auto; font-size: 13px; padding: 0 14px; }
+#hits:not(:empty) { padding-bottom: 8px; }
+#hits p { margin: 0 0 6px; }
+#hits button { display: grid; grid-template-columns: 44px 1fr; gap: 8px; width: 100%; padding: 5px 0; line-height: 1.35; }
+#hits button:hover { color: var(--ink); background: #e2e2df; }
 body.split .page { max-width: none; margin: 0 46vw 0 0; }
 body.split .row .l { height: auto; min-height: 46px; white-space: normal; padding: 6px 0; }
 @media (max-width: 760px) { .grid > *, .row .l, .row .v, .seg, .btn, .note { grid-column: 1 / -1 !important; } .sec { grid-row: auto; padding-bottom: 8px; } .head h1 { font-size: 44px; } }

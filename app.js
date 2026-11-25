@@ -9,7 +9,7 @@ import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
 const PAGES = ['files', 'data', 'images', 'export'];
-const S = { files: [], report: null, model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, html: true }, pics: null, picsKey: '' };
+const S = { files: [], report: null, q: '', qKey: null, model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, html: true }, pics: null, picsKey: '' };
 let api = null;
 document.getElementById('doc-css').textContent = DOC_CSS;
 
@@ -44,7 +44,11 @@ async function addFile(name, size, getBuffer) {
   S.files.push(f);
   render();
   if (f.kind === 'pdf') {
-    try { f.url = URL.createObjectURL(new Blob([await getBuffer()], { type: 'application/pdf' })); f.status = 'done'; } catch (e) { f.status = 'error'; }
+    try {
+      const buf = await getBuffer();
+      f.url = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' })); f.status = 'done';
+      readText(f, new Uint8Array(buf.slice(0)));
+    } catch (e) { f.status = 'error'; }
     render(); return;
   }
   if (f.kind !== 'ifc') { f.status = 'done'; render(); return; }
@@ -63,6 +67,49 @@ async function addFile(name, size, getBuffer) {
   }
   render();
 }
+// ---- report text: read once with pdf.js, searched in the panel. Pages stay in this browser.
+let pdfjs = null;
+async function readText(f, data) {
+  try {
+    if (!pdfjs) {
+      pdfjs = await import('./vendor/pdf.min.mjs');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
+    }
+    const doc = await pdfjs.getDocument({ data }).promise, pages = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const c = await (await doc.getPage(i)).getTextContent();
+      pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
+    }
+    f.pages = pages;
+  } catch (e) { console.error(e); f.pages = []; }
+  if (S.report === f) hits();
+}
+// Search terms used when a field gets the focus. Spaces in a term also match no space ("27 °C", "27°C").
+const CONTEXT = { energy_limit: 'BR18', energy_be18: 'BE18', energy_ida: 'IDA', daylight_sda300: 'sDA', heating_load: 'heating load', hours_above_27: '27 °C', time_in_category_2: 'category II', co2_max: 'ppm', floor_area: 'floor area' };
+const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function hits() {
+  const el = $('#hits'), f = S.report;
+  if (!el || !f) return;
+  const q = S.q.trim();
+  if (!q) { el.innerHTML = ''; return; }
+  if (!f.pages) { el.innerHTML = '<p class="dim">Reading the text of the report</p>'; return; }
+  if (!f.pages.length || f.pages.every((p) => !p.trim())) { el.innerHTML = '<p class="dim">This PDF has no searchable text</p>'; return; }
+  const re = new RegExp(q.split(/\s+/).map(reEsc).join('\\s*'), 'gi'), out = [];
+  let n = 0;
+  f.pages.forEach((t, i) => {
+    for (const m of t.matchAll(re)) {
+      n++;
+      if (out.length < 40) out.push(`<button data-page="${i + 1}"><span class="dim">p. ${i + 1}</span><span><span class="dim">${esc(t.slice(Math.max(0, m.index - 50), m.index))}</span>${esc(m[0])}<span class="dim">${esc(t.slice(m.index + m[0].length, m.index + m[0].length + 70))}</span></span></button>`);
+    }
+  });
+  el.innerHTML = n ? `<p class="dim">${n} ${n === 1 ? 'hit' : 'hits'}${n > out.length ? `, first ${out.length} shown` : ''}</p>` + out.join('') : '<p class="dim">No hits</p>';
+}
+function goPage(n) {
+  const fr = $('#panel iframe');
+  if (!fr || !S.report) return;
+  const nf = fr.cloneNode(); nf.src = `${S.report.url}#page=${n}&navpanes=0&view=FitH`; fr.replaceWith(nf);
+}
+
 // Removing a file. Removing the MEP model also clears what was read from it.
 function drop(f) {
   S.files = S.files.filter((x) => x !== f);
@@ -123,13 +170,14 @@ function modelRow(v, label) {
 
 function pageData() {
   const m = S.model;
-  if (!m) return head('Data', 'Values for the course, from the model and from the report of the team.') + noModel();
-  const vals = buildValues(m, S.state), by = Object.fromEntries(vals.map((v) => [v.key, v]));
-  let h = head('Data', `Project ${esc(m.id)}. Grey fields are yours to fill from the report. Everything else was read from the model and can be corrected.`);
   const reports = S.files.filter((f) => f.kind === 'pdf' && f.url);
-  h += block('Report', reports.length ? 'opens next to the fields' : 'none yet', reports.length
+  const rep = block('Report', reports.length ? 'opens next to the fields' : 'none yet', reports.length
     ? reports.map((f) => row(esc(f.name), `<button class="edit" style="margin-left:0;padding-left:0" data-report="${S.files.indexOf(f)}">${S.report === f ? 'Close' : 'Open next to the fields'}</button>`)).join('')
     : `<p class="note">Add the PDF report of the team on the page Files to read the values next to the fields.</p>`);
+  if (!m) return head('Data', 'Values for the course, from the model and from the report of the team.') + rep + noModel();
+  const vals = buildValues(m, S.state), by = Object.fromEntries(vals.map((v) => [v.key, v]));
+  let h = head('Data', `Project ${esc(m.id)}. Grey fields are yours to fill from the report. Everything else was read from the model and can be corrected.`);
+  h += rep;
   const req = REQUIRED.map((d) => by[d.key]);
   h += block('Required', `${req.filter((v) => !isEmpty(v.value)).length} of ${req.length} complete`, req.map((v) => {
     if (v.def.kind === 'model') return modelRow(v, esc(v.label));
@@ -200,7 +248,8 @@ function panel() {
   el.hidden = false;
   if (el.dataset.url !== f.url) {
     el.dataset.url = f.url;
-    el.innerHTML = `<div class="bar"><span>${esc(f.name)}</span><button class="x" data-act="closereport" aria-label="Close the report">${X}</button></div><iframe title="Report" src="${f.url}#navpanes=0&view=FitH"></iframe>`;
+    el.innerHTML = `<div class="bar"><span class="name">${esc(f.name)}</span><button class="x" data-act="closereport" aria-label="Close the report">${X}</button></div><div class="find"><input id="q" data-search placeholder="Search the report" value="${esc(S.q)}"></div><div id="hits"></div><iframe title="Report" src="${f.url}#navpanes=0&view=FitH"></iframe>`;
+    hits();
   }
 }
 function scaleThumbs() {
@@ -264,6 +313,7 @@ document.addEventListener('click', (e) => {
   else if (d.act === 'closereport') { S.report = null; render(); return; }
   else if (d.report) { const f = S.files[+d.report]; S.report = S.report === f ? null : f; render(); return; }
   else if (d.rmfile) { drop(S.files[+d.rmfile]); render(); return; }
+  else if (d.page) { goPage(+d.page); return; }
   else if (d.editk) S.editing = d.editk;
   else if (d.reset) { delete st.edits[d.reset]; S.editing = null; }
   else if (d.opt) st.optional[d.opt] = st.optional[d.opt] === false;
@@ -282,6 +332,15 @@ document.addEventListener('change', (e) => {
   else if (d.own) st.own[+d.own][d.f] = t.value;
   else return;
   save(); soon();
+});
+document.addEventListener('input', (e) => { if (e.target.dataset.search !== undefined) { S.q = e.target.value; S.qKey = null; hits(); } });
+// Context search: a field of the report gets the focus, the panel searches for its term.
+document.addEventListener('focusin', (e) => {
+  const k = e.target.dataset && e.target.dataset.in;
+  if (!k || !S.report || !CONTEXT[k] || S.qKey === k) return;
+  S.q = CONTEXT[k]; S.qKey = k;
+  const q = $('#q'); if (q) q.value = S.q;
+  hits();
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
 let depth = 0;

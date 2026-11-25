@@ -4,4 +4,4 @@ A small web app for the DTU course Architectural Masterclass. It reads the MEP m
 
 Open the app, drop the MEP IFC of your project, check and complete the values, export. Everything runs on your own computer. No file is uploaded.
 
-Built with web-ifc (MPL 2.0) and fflate (MIT), included in `vendor/`.
+Built with web-ifc (MPL 2.0), pdf.js (Apache 2.0) and fflate (MIT), included in `vendor/`.
