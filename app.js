@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js';
-import { REQUIRED, OPTIONAL, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty } from './data.js';
-import { FIELDS, pictograms } from './pictos.js';
-import { DOC_CSS, pages, documentHTML } from './doc.js';
+import { analyze, fmt } from './core.js?v=2d095b3';
+import { REQUIRED, OPTIONAL, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty } from './data.js?v=2d095b3';
+import { FIELDS, pictograms } from './pictos.js?v=2d095b3';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=2d095b3';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -72,8 +72,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=2d095b3');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=2d095b3', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -429,3 +429,5 @@ if (new URLSearchParams(location.search).has('demo')) {
     .catch(() => { S.files.push({ name, kind: 'other', status: 'error' }); render(); });
 }
 window.SERVICES = S;
+
+window.SERVICES_VERSION = '2d095b3';
