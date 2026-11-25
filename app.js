@@ -1,0 +1,276 @@
+// Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
+// export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
+import * as WebIFC from './vendor/web-ifc-api.js';
+import { analyze, fmt } from './core.js';
+import { REQUIRED, OPTIONAL, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty } from './data.js';
+import { FIELDS, pictograms } from './pictos.js';
+import { DOC_CSS, pages, documentHTML } from './doc.js';
+import { zipSync, strToU8 } from './vendor/fflate.js';
+
+const $ = (s) => document.querySelector(s);
+const PAGES = ['files', 'data', 'images', 'export'];
+const S = { files: [], model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, html: true }, pics: null, picsKey: '' };
+let api = null;
+document.getElementById('doc-css').textContent = DOC_CSS;
+
+async function engine() {
+  if (!api) {
+    api = new WebIFC.IfcAPI();
+    api.SetWasmPath(new URL('./vendor/', import.meta.url).href, true);
+    await api.Init();
+  }
+  return api;
+}
+
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const PEN = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2.5 13.5l.6-3L10.8 2.8a1.2 1.2 0 0 1 1.7 0l.7.7a1.2 1.2 0 0 1 0 1.7L5.5 12.9z"/><path d="M9.6 4l2.4 2.4"/></svg>';
+const PLUS = '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2v12M2 8h12"/></svg>';
+const chk = (on) => `<svg class="chk" role="img" aria-label="${on ? 'selected' : 'not selected'}" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="1" width="14" height="14"/>${on ? '<path d="M4 8.3l2.7 2.7L12 5.2"/>' : ''}</svg>`;
+
+// ---- storage: inputs and corrections per model, in this browser only
+const storeKey = (m) => 'services:' + m.id + ':' + m.elements.length;
+function load(m) {
+  try { const s = JSON.parse(localStorage.getItem(storeKey(m)) || 'null'); if (s) return { ...emptyState(), ...s, images: { ...emptyState().images, ...(s.images || {}) } }; } catch (e) {}
+  return emptyState();
+}
+function save() { if (!S.model) return; try { localStorage.setItem(storeKey(S.model), JSON.stringify(S.state)); } catch (e) {} }
+
+// ---- files: the IFC with building services is found by its content, not by its name
+const isMEP = (m) => m.elements.filter((e) => e.seg).length >= 10;
+async function addFile(name, size, getBuffer) {
+  const f = { name, size, kind: /\.ifc$/i.test(name) ? 'ifc' : /\.pdf$/i.test(name) ? 'pdf' : 'other', status: 'reading' };
+  S.files = S.files.filter((x) => x.name !== name);
+  S.files.push(f);
+  render();
+  if (f.kind !== 'ifc') { f.status = 'done'; render(); return; }
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    const m = analyze(WebIFC, await engine(), new Uint8Array(await getBuffer()), name);
+    f.status = 'done';
+    if (isMEP(m)) {
+      S.files.forEach((x) => { if (x.kind === 'mep') x.kind = 'ifc'; });
+      f.kind = 'mep';
+      S.model = m; S.state = load(m); S.editing = null; S.pics = null; S.prev = null;
+    }
+  } catch (e) {
+    console.error(e);
+    f.status = 'error';
+  }
+  render();
+}
+async function addFiles(list) { for (const f of list) await addFile(f.name, f.size, () => f.arrayBuffer()); }
+
+function pics() {
+  const o = S.state.images, key = o.colour + o.storeys + o.detail;
+  if (!S.pics || S.picsKey !== key) { S.pics = pictograms(S.model, o); S.picsKey = key; }
+  return S.pics;
+}
+const svgMap = () => Object.fromEntries(pics().list.map((x) => [x.id, x.svg]));
+const docCtx = () => ({ m: S.model, values: buildValues(S.model, S.state), svgs: svgMap(), black: S.state.images.colour === 'black' });
+
+// ---- page parts
+const head = (t, p) => `<div class="grid head"><h1>${t}</h1><p>${p}</p></div>`;
+const block = (name, sub, body) => `<div class="grid block"><div class="sec"><span>${name}</span><span class="small dim">${sub}</span></div>${body}</div>`;
+const row = (l, v, cls = '') => `<div class="row ${cls}"><span class="l">${l}</span><span class="v">${v}</span></div>`;
+const noModel = () => block('Model', 'none yet', `<p class="note">Add the MEP model of the project on the page Files first.</p>`);
+
+function pageFiles() {
+  const m = S.model;
+  const used = S.files.filter((f) => f.kind === 'mep').length;
+  const what = (f) => (f.status === 'reading' ? 'reading' : f.status === 'error' ? 'could not be read' : f.kind === 'mep' ? 'services, all values and images' : 'nothing needed');
+  let h = head('Files', 'The IFC models and PDF reports of the project. They are read on this computer and not uploaded. Only what helps the services is taken.');
+  h += block('Files', `${used} of ${S.files.length} used`,
+    `<button class="fill drop" data-act="choose"><span class="small dim">Drop the models and reports of the project here or choose them</span><b>${S.files.length} ${S.files.length === 1 ? 'file' : 'files'}</b></button>` +
+    S.files.map((f) => row(esc(f.name), what(f), f.kind === 'mep' || f.status === 'reading' ? '' : 'off')).join(''));
+  if (!m) return h;
+  h += block('Content', `read in ${(m.ms / 1000).toFixed(1)} s`,
+    row('Schema', esc(m.schema || 'unknown')) + row('Elements', fmt(m.elements.length)) + row('Systems', fmt(m.systems.length)) + row('Storeys', fmt(m.storeys.length)));
+  const inSys = m.elements.length - m.unassigned, named = m.systems.filter((s) => s.cat).length;
+  const checks = [inSys === m.elements.length, named === m.systems.length && m.systems.length > 0, m.storeys.length > 0];
+  h += block('Check for required data', `${checks.filter(Boolean).length} of 3 met`,
+    row('Every element belongs to a system', `${fmt(inSys)} of ${fmt(m.elements.length)}`, checks[0] ? '' : 'off') +
+    row('System names can be read', `${fmt(named)} of ${fmt(m.systems.length)}`, checks[1] ? '' : 'off') +
+    row('Storeys are defined', fmt(m.storeys.length), checks[2] ? '' : 'off') +
+    row('Air terminals are modelled', m.terminals ? fmt(m.terminals) : 'none, optional data only', m.terminals ? '' : 'off'));
+  return h;
+}
+
+// A model value: plain text with Edit, or a field with "model <value>, reset" once it is edited.
+function modelRow(v, label) {
+  const unit = v.unit ? ' ' + esc(v.unit) : '';
+  if (S.editing === v.key || v.source === 'manual') {
+    const cur = v.source === 'manual' ? display(v) : display({ ...v, value: v.model });
+    const was = isEmpty(v.model) ? 'n/a' : display({ ...v, value: v.model });
+    return row(label, `<input data-k="edit:${v.key}" data-edit="${v.key}" value="${esc(cur)}"><span class="edit small dim">model ${esc(was)},&nbsp;<button data-reset="${v.key}">reset</button></span>`, 'in');
+  }
+  if (isEmpty(v.value)) return row(label, v.def.needs ? 'needs the floor area' : 'n/a', 'off');
+  const sub = ''; // one line per row, details go into the note column of the export
+  const text = esc(display(v)) + (typeof v.value === 'number' ? unit : '');
+  return `<div class="row"><span class="l">${label}</span><span class="v${sub ? ' stack' : ''}"><span style="display:flex;width:100%"><span>${text}</span><button class="edit small dim" data-editk="${v.key}">${PEN}Edit</button></span>${sub ? `<span class="small dim">${esc(sub)}</span>` : ''}</span></div>`;
+}
+
+function pageData() {
+  const m = S.model;
+  if (!m) return head('Data', 'Values for the course, from the model and from the report of the team.') + noModel();
+  const vals = buildValues(m, S.state), by = Object.fromEntries(vals.map((v) => [v.key, v]));
+  let h = head('Data', `Project ${esc(m.id)}. Grey fields are yours to fill from the report. Everything else was read from the model and can be corrected.`);
+  const req = REQUIRED.map((d) => by[d.key]);
+  h += block('Required', `${req.filter((v) => !isEmpty(v.value)).length} of ${req.length} complete`, req.map((v) => {
+    if (v.def.kind === 'model') return modelRow(v, esc(v.label));
+    const raw = S.state.inputs[v.key] || '';
+    if (v.def.kind === 'choice') return row(esc(v.label), `<select data-k="in:${v.key}" data-in="${v.key}" class="${raw ? '' : 'dim'}"><option value="">choose</option>${v.def.options.map((o) => `<option${o === raw ? ' selected' : ''}>${o}</option>`).join('')}</select>`, 'in');
+    return row(esc(v.label), `<input data-k="in:${v.key}" data-in="${v.key}" inputmode="decimal" value="${esc(raw)}"><span class="u dim">${esc(v.unit)}</span>`, 'in');
+  }).join(''));
+  const opt = OPTIONAL.map((d) => by[d.key]), own = vals.filter((v) => v.level === 'own');
+  const sub = `${opt.filter((v) => v.selected).length} of ${opt.length} selected, ${opt.filter((v) => v.source === 'manual').length} corrected, ${own.length} own`;
+  h += block('Optional', sub, opt.map((v) => {
+    const label = `<button data-opt="${v.key}" style="display:flex;gap:14px;align-items:center">${chk(v.selected)}${esc(v.label)}</button>`;
+    if (!v.selected) return row(label, esc(display(v)), 'off');
+    return modelRow(v, label);
+  }).join('') + S.state.own.map((o, i) => `<div class="row in"><span class="l">${chk(true)}<span class="own"><input data-k="own:${i}:label" data-own="${i}" data-f="label" placeholder="Label" value="${esc(o.label || '')}"></span></span><span class="v"><input data-k="own:${i}:value" data-own="${i}" data-f="value" placeholder="value" value="${esc(o.value || '')}"><input class="unit" data-k="own:${i}:unit" data-own="${i}" data-f="unit" placeholder="unit" value="${esc(o.unit || '')}"><span class="edit small dim"><button data-rmown="${i}">remove</button></span></span></div>`).join('') +
+    `<div class="row"><span class="l"><span class="plus dim">${PLUS}</span><button class="own dim" data-act="addown">Add your own value</button></span><span class="v"></span></div>`);
+  h += `<div class="grid"><p class="note">Inputs and corrections are kept in this browser for this model.</p><button class="btn light" data-act="reset">Reset all</button></div>`;
+  return h;
+}
+
+function pageImages() {
+  const m = S.model;
+  if (!m) return head('Images', 'Two images, always with the same view and the same scale, so that projects can be compared.') + noModel();
+  const o = S.state.images, pkey = 'p' + o.colour + o.storeys + o.detail;
+  // heavier lines for the small previews, the exported images keep their fine lines
+  if (!S.prev || S.prevKey !== pkey) { S.prev = [pictograms(S.model, { ...o, weight: 1.8 }).list[0], ...pictograms(S.model, { ...o, weight: 3.2 }).list.slice(1)]; S.prevKey = pkey; }
+  const p = S.prev;
+  const pic = (x, cls) => `<div class="${cls}"><div class="im" role="img" aria-label="${x.label}">${x.svg}</div><span class="cap small dim">${x.label}</span></div>`;
+  let h = head('Images', 'Two images, always with the same view and the same scale, so that projects can be compared.');
+  h += block('Preview', `project ${esc(m.id)}`, `<div class="fill imgs">${pic(p[0], 'overview')}<div class="pictos">${p.slice(1).map((x) => pic(x, 'pic')).join('')}</div></div>`);
+  const seg = (label, k, a, b) => `<div class="row"><span class="l">${label}</span><div class="seg">${[a, b].map(([v, t]) => `<button data-img="${k}" data-val="${v}" class="${o[k] === v ? 'on' : ''}">${t}</button>`).join('')}</div></div>`;
+  h += block('Settings', 'for all images', seg('Colour', 'colour', ['colour', 'Colour'], ['black', 'Black']) + seg('Storeys', 'storeys', ['shown', 'Shown'], ['hidden', 'Hidden']) + seg('Detail', 'detail', ['all', 'All elements'], ['main', 'Main runs']));
+  return h;
+}
+
+function pageExport() {
+  const m = S.model;
+  if (!m) return head('Export', 'One download with the data, the images and a document with three pages.') + noModel();
+  const vals = buildValues(m, S.state), rows = exportRows(vals);
+  const empty = vals.filter((v) => v.level === 'required' && isEmpty(v.value)).length;
+  const sel = S.out, n = Object.values(sel).filter(Boolean).length;
+  let h = head('Export', 'One download with the data, the images and a document with three pages.');
+  h += block('Document', 'services.html, 3 pages', `<div class="fill thumbs">${pages(docCtx()).map((p) => `<div class="thumb doc">${p}</div>`).join('')}</div>`);
+  const item = (k, name, what) => `<div class="row"><button class="l" data-out="${k}">${chk(k === 'all' ? n === 4 : sel[k])}${name}</button><span class="v">${what}</span></div>`;
+  h += block('Files', `${n} of 4 selected`,
+    item('all', 'All files', `services-${esc(m.id)}.zip`) + item('csv', 'data.csv', `${rows.length} values with unit and source`) + item('json', 'data.json', 'the same values for scripts') +
+    item('images', 'images/', `${FIELDS.length} images as SVG and PNG`) + item('html', 'services.html', '3 pages, opens in any browser'));
+  h += `<div class="grid"><p class="note">${empty ? `${empty} required ${empty === 1 ? 'value is' : 'values are'} still empty. ${empty === 1 ? 'It is' : 'They are'} exported as n/a.` : 'All required values are filled in.'}</p><button class="btn" data-act="download"${n ? '' : ' disabled'}>Download</button></div>`;
+  h += `<div class="grid"><p class="note">The document as PDF: choose Save as PDF in the print dialog.</p><button class="btn light" data-act="print">Print PDF</button></div>`;
+  return h;
+}
+
+// ---- render, keeps the focused field focused
+let page = 'files';
+function render() {
+  const a = document.activeElement, fk = a && a.dataset ? a.dataset.k : null;
+  page = PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'files';
+  document.querySelectorAll('header nav a').forEach((x) => x.classList.toggle('on', x.dataset.s === page));
+  $('#main').innerHTML = { files: pageFiles, data: pageData, images: pageImages, export: pageExport }[page]();
+  if (fk) { const el = document.querySelector(`[data-k="${fk}"]`); if (el) el.focus(); }
+  scaleThumbs();
+}
+function scaleThumbs() {
+  document.querySelectorAll('.thumb').forEach((t) => { const s = t.querySelector('.sheet'); if (s) s.style.transform = `scale(${t.clientWidth / 1280})`; });
+}
+// A change re-renders after the current click, so a button pressed while leaving a field still works.
+let pressing = false, dirty = false;
+document.addEventListener('pointerdown', () => { pressing = true; }, true);
+document.addEventListener('pointerup', () => setTimeout(() => { pressing = false; if (dirty) { dirty = false; render(); } }, 0), true);
+const soon = () => setTimeout(() => { if (pressing) dirty = true; else render(); }, 0);
+
+// ---- export
+async function png(svg, vb) {
+  const w = 2400, h = Math.round((w * vb.h) / vb.w);
+  const url = URL.createObjectURL(new Blob([svg.replace('<svg ', `<svg width="${w}" height="${h}" `)], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
+    const blob = await new Promise((ok) => c.toBlob(ok, 'image/png'));
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally { URL.revokeObjectURL(url); }
+}
+async function download() {
+  const m = S.model, rows = exportRows(buildValues(m, S.state)), files = {};
+  if (S.out.csv) files['data.csv'] = strToU8(toCSV(rows));
+  if (S.out.json) files['data.json'] = strToU8(toJSON(rows, m));
+  if (S.out.images) {
+    const p = pics();
+    for (const x of p.list) {
+      const name = x.id === 'all' ? 'overview' : x.id;
+      files[`images/${name}.svg`] = strToU8(x.svg);
+      files[`images/${name}.png`] = await png(x.svg, p.viewBox);
+    }
+  }
+  if (S.out.html) files['services.html'] = strToU8(documentHTML(docCtx()));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([zipSync(files)], { type: 'application/zip' }));
+  a.download = `services-${m.id}.zip`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function print() {
+  $('#print').innerHTML = pages(docCtx()).join('');
+  window.print();
+}
+
+// ---- events
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  const st = S.state, d = t.dataset;
+  if (d.act === 'choose') $('#file').click();
+  else if (d.act === 'addown') st.own.push({ label: '', value: '', unit: '' });
+  else if (d.act === 'reset') { if (!confirm('Reset all inputs and corrections of this project?')) return; S.state = emptyState(); S.pics = null; }
+  else if (d.act === 'download') { download(); return; }
+  else if (d.act === 'print') { print(); return; }
+  else if (d.editk) S.editing = d.editk;
+  else if (d.reset) { delete st.edits[d.reset]; S.editing = null; }
+  else if (d.opt) st.optional[d.opt] = st.optional[d.opt] === false;
+  else if (d.rmown) st.own.splice(+d.rmown, 1);
+  else if (d.img) st.images[d.img] = d.val;
+  else if (d.out) { if (d.out === 'all') { const on = !Object.values(S.out).every(Boolean); for (const k in S.out) S.out[k] = on; } else S.out[d.out] = !S.out[d.out]; }
+  else return;
+  save(); render();
+  if (d.editk) { const el = document.querySelector(`[data-edit="${d.editk}"]`); if (el) { el.focus(); el.select(); } }
+});
+document.addEventListener('change', (e) => {
+  const t = e.target, d = t.dataset, st = S.state;
+  if (t.id === 'file') { addFiles([...t.files]); t.value = ''; return; }
+  if (d.in) st.inputs[d.in] = t.value;
+  else if (d.edit) { if (t.value.trim()) st.edits[d.edit] = t.value; else delete st.edits[d.edit]; S.editing = null; }
+  else if (d.own) st.own[+d.own][d.f] = t.value;
+  else return;
+  save(); soon();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
+let depth = 0;
+const dropOn = (on) => { const el = document.querySelector('.drop'); if (el) el.classList.toggle('on', on); };
+window.addEventListener('dragenter', (e) => { e.preventDefault(); depth++; dropOn(true); });
+window.addEventListener('dragleave', () => { depth = Math.max(0, depth - 1); if (!depth) dropOn(false); });
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault(); depth = 0; dropOn(false);
+  if (location.hash.slice(1) !== 'files') location.hash = 'files';
+  addFiles([...e.dataTransfer.files]);
+});
+window.addEventListener('hashchange', () => { S.editing = null; render(); window.scrollTo(0, 0); });
+window.addEventListener('resize', scaleThumbs);
+
+render();
+if (new URLSearchParams(location.search).has('demo')) {
+  const name = '26-06-MEP.ifc';
+  fetch('./samples/' + name).then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then((buf) => addFile(name, buf.byteLength, async () => buf))
+    .catch(() => { S.files.push({ name, kind: 'other', status: 'error' }); render(); });
+}
+window.SERVICES = S;
