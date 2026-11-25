@@ -106,6 +106,9 @@ body.split .row .l { height: auto; min-height: 46px; white-space: normal; paddin
   #print { display: block; }
   #print .sheet { page-break-after: always; break-after: page; }
 }
+  body.video .hl { background: rgba(255,200,0,.75); box-shadow: 0 0 0 2px rgba(255,200,0,.75); }
+  .ring { position: fixed; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 1.5px solid #000; border-radius: 50%; pointer-events: none; z-index: 99; animation: ring .6s ease-out forwards; }
+  @keyframes ring { from { transform: scale(.3); opacity: .7 } to { transform: scale(1.4); opacity: 0 } }
 </style>
 <style id="doc-css"></style>
 </head>
@@ -122,6 +125,6 @@ body.split .row .l { height: auto; min-height: 46px; white-space: normal; paddin
 <div id="panel" hidden></div>
 <div id="print" class="doc"></div>
 <input id="file" type="file" accept=".ifc,.pdf" multiple hidden>
-<script type="module" src="./app.js?v=0a36d06"></script>
+<script type="module" src="./app.js?v=17b7bc1"></script>
 </body>
 </html>

@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=0a36d06';
-import { REQUIRED, OPTIONAL, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty } from './data.js?v=0a36d06';
-import { FIELDS, pictograms } from './pictos.js?v=0a36d06';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=0a36d06';
+import { analyze, fmt } from './core.js?v=17b7bc1';
+import { REQUIRED, OPTIONAL, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty } from './data.js?v=17b7bc1';
+import { FIELDS, pictograms } from './pictos.js?v=17b7bc1';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=17b7bc1';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -34,9 +34,14 @@ function load(m) {
   try { const s = JSON.parse(localStorage.getItem(storeKey(m)) || 'null'); if (s) return { ...emptyState(), ...s, images: { ...emptyState().images, ...(s.images || {}) } }; } catch (e) {}
   return emptyState();
 }
-function save() { if (!S.model) return; try { localStorage.setItem(storeKey(S.model), JSON.stringify(S.state)); } catch (e) {} }
+function save() { if (!S.model || VIDEO) return; try { localStorage.setItem(storeKey(S.model), JSON.stringify(S.state)); } catch (e) {} }
 
 // ---- files: the IFC with building services is found by its content, not by its name
+// ---- recording mode (?video, local only): 26-06 is read in advance, one click on the drop field adds
+// the model and the report, the report values are filled in as in the example PDF. Nothing is saved.
+const VIDEO = new URLSearchParams(location.search).has('video');
+const PRE = new Map();
+const VIDEO_INPUTS = { energy_limit: '41.2', energy_be18: '40.9', daylight_sda300: 'met', hours_above_27: '0.1', co2_max: '1219', floor_area: '6134' };
 const isMEP = (m) => m.elements.filter((e) => e.seg).length >= 10;
 async function addFile(name, size, getBuffer) {
   const f = { name, size, kind: /\.ifc$/i.test(name) ? 'ifc' : /\.pdf$/i.test(name) ? 'pdf' : 'other', status: 'reading' };
@@ -54,12 +59,13 @@ async function addFile(name, size, getBuffer) {
   if (f.kind !== 'ifc') { f.status = 'done'; render(); return; }
   await new Promise((r) => setTimeout(r, 30));
   try {
-    const m = analyze(WebIFC, await engine(), new Uint8Array(await getBuffer()), name);
+    const m = PRE.get(name) || analyze(WebIFC, await engine(), new Uint8Array(await getBuffer()), name);
+    if (PRE.has(name)) await new Promise((r) => setTimeout(r, 700));
     f.status = 'done';
     if (isMEP(m)) {
       S.files.forEach((x) => { if (x.kind === 'mep') x.kind = 'ifc'; });
       f.kind = 'mep';
-      S.model = m; S.state = load(m); S.editing = null; S.pics = null; S.prev = null;
+      S.model = m; S.state = VIDEO ? { ...emptyState(), inputs: { ...VIDEO_INPUTS } } : load(m); S.editing = null; S.pics = null; S.prev = null;
     }
   } catch (e) {
     console.error(e);
@@ -72,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=0a36d06');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=0a36d06', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=17b7bc1');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=17b7bc1', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +95,8 @@ async function readText(f, data) {
 // Search terms used when a field gets the focus. Spaces in a term also match no space ("27 °C", "27°C").
 const CONTEXT = { energy_limit: 'BR18', energy_be18: 'BE18', energy_ida: 'IDA', daylight_sda300: 'sDA', heating_load: 'heating load', hours_above_27: '27 °C', time_in_category_2: 'category II', co2_max: 'ppm', floor_area: 'floor area' };
 const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const searchRe = () => { const q = S.q.trim(); return q ? new RegExp(q.split(/\s+/).map(reEsc).join('\\s*'), 'gi') : null; };
+// pdf.js often splits words and numbers into pieces ("41 , 2", "en ergy"), so spaces are allowed between all characters.
+const searchRe = () => { const q = S.q.replace(/\s+/g, ''); return q ? new RegExp([...q].map(reEsc).join('\\s*'), 'gi') : null; };
 function hits() {
   const el = $('#hits'), f = S.report;
   if (!el || !f) return;
@@ -147,16 +154,24 @@ function mark(d) {
   const re = searchRe();
   if (!re) return;
   const W = d._vp.width, H = d._vp.height;
-  for (const it of d._items) {
-    if (!it.str) continue;
-    const t = pdfjs.Util.transform(d._vp.transform, it.transform), fh = Math.hypot(t[2], t[3]), len = it.str.length;
-    for (const m of it.str.matchAll(re)) {
-      const x = t[4] + (it.width * m.index) / len, w = (it.width * m[0].length) / len;
+  // The text items of a page are joined, so a hit may run across several items. Each item gets its own mark.
+  const items = d._items.filter((it) => it.str), start = [];
+  let all = '';
+  for (const it of items) { start.push(all.length); all += it.str; }
+  for (const m of all.matchAll(re)) {
+    const a = m.index, b = m.index + m[0].length;
+    items.forEach((it, k) => {
+      const s0 = start[k], s1 = s0 + it.str.length;
+      if (s1 <= a || s0 >= b) return;
+      const from = Math.max(a, s0) - s0, to = Math.min(b, s1) - s0, len = it.str.length;
+      if (!it.str.slice(from, to).trim()) return;
+      const t = pdfjs.Util.transform(d._vp.transform, it.transform), fh = Math.hypot(t[2], t[3]);
+      const x = t[4] + (it.width * from) / len, w = (it.width * (to - from)) / len;
       const s = document.createElement('span');
       s.className = 'hl';
       s.style.cssText = `left:${(x / W) * 100}%;top:${((t[5] - fh) / H) * 100}%;width:${(w / W) * 100}%;height:${(fh * 1.2 / H) * 100}%`;
       d.appendChild(s);
-    }
+    });
   }
 }
 function current() {
@@ -170,7 +185,13 @@ function goPage(n) {
   const box = $('#pages'), d = box && box.querySelector(`.pg[data-n="${n}"]`);
   if (!d) return;
   let tries = 0;
-  const go = () => { box.scrollTop += d.getBoundingClientRect().top - box.getBoundingClientRect().top; if (++tries < 6) setTimeout(go, 150); };
+  // to the first mark of the page once it is drawn, otherwise to the top of the page
+  const go = () => {
+    const h = d.querySelector('.hl'), b = box.getBoundingClientRect();
+    if (h) { const r = h.getBoundingClientRect(); box.scrollTop += r.top - b.top - b.height / 3; box.scrollLeft += r.left - b.left - b.width / 3; }
+    else box.scrollTop += d.getBoundingClientRect().top - b.top;
+    if (++tries < 8) setTimeout(go, 150);
+  };
   go();
 }
 
@@ -369,7 +390,7 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('button');
   if (!t) return;
   const st = S.state, d = t.dataset;
-  if (d.act === 'choose') $('#file').click();
+  if (d.act === 'choose') { if (VIDEO && PRE.size) videoDrop(); else $('#file').click(); }
   else if (d.act === 'addown') st.own.push({ label: '', value: '', unit: '' });
   else if (d.act === 'reset') { if (!confirm('Reset all inputs and corrections of this project?')) return; S.state = emptyState(); S.pics = null; }
   else if (d.act === 'download') { download(); return; }
@@ -406,6 +427,8 @@ document.addEventListener('focusin', (e) => {
   S.q = CONTEXT[k]; S.qKey = k;
   const q = $('#q'); if (q) q.value = S.q;
   hits();
+  const first = document.querySelector('#hits [data-page]'); // and shows the first hit right away
+  if (first) goPage(+first.dataset.page);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
 let depth = 0;
@@ -428,6 +451,24 @@ if (new URLSearchParams(location.search).has('demo')) {
     .then((buf) => addFile(name, buf.byteLength, async () => buf))
     .catch(() => { S.files.push({ name, kind: 'other', status: 'error' }); render(); });
 }
+if (VIDEO) {
+  S.zoom = 3; document.body.classList.add('video'); // the report larger, so the marks can be seen in the recording
+  CONTEXT.energy_limit = '41,2'; // in the video the search finds the value itself in the report
+  const ifc = '26-06-MEP.ifc', pdf = '26-06-D-MEP-Anon.pdf', bufs = {};
+  Promise.all([ifc, pdf].map((n) => fetch('./samples/' + n).then((r) => { if (!r.ok) throw new Error(n); return r.arrayBuffer(); }).then((b) => { bufs[n] = b; })))
+    .then(async () => { PRE.set(ifc, analyze(WebIFC, await engine(), new Uint8Array(bufs[ifc]), ifc)); document.body.classList.add('ready'); })
+    .catch((e) => console.error('video mode', e));
+  window.videoDrop = () => {
+    location.hash = 'files';
+    addFile(ifc, bufs[ifc].byteLength, async () => bufs[ifc]);
+    setTimeout(() => addFile(pdf, bufs[pdf].byteLength, async () => bufs[pdf].slice(0)), 250);
+  };
+  // a soft ring at every click, so the clicks can be followed in the recording
+  document.addEventListener('pointerdown', (e) => {
+    const r = document.createElement('i'); r.className = 'ring'; r.style.left = e.clientX + 'px'; r.style.top = e.clientY + 'px';
+    document.body.appendChild(r); setTimeout(() => r.remove(), 600);
+  });
+}
 window.SERVICES = S;
 
-window.SERVICES_VERSION = '0a36d06';
+window.SERVICES_VERSION = '17b7bc1';
