@@ -9,7 +9,7 @@ import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
 const PAGES = ['files', 'data', 'images', 'export'];
-const S = { files: [], report: null, q: '', qKey: null, model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, html: true }, pics: null, picsKey: '' };
+const S = { files: [], report: null, q: '', qKey: null, zoom: 1, model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, html: true }, pics: null, picsKey: '' };
 let api = null;
 document.getElementById('doc-css').textContent = DOC_CSS;
 
@@ -76,12 +76,14 @@ async function readText(f, data) {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
+    f.doc = doc;
+    if (S.report === f) view();
     for (let i = 1; i <= doc.numPages; i++) {
       const c = await (await doc.getPage(i)).getTextContent();
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-  } catch (e) { console.error(e); f.pages = []; }
+  } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
 }
 // Search terms used when a field gets the focus. Spaces in a term also match no space ("27 °C", "27°C").
@@ -104,10 +106,49 @@ function hits() {
   });
   el.innerHTML = n ? `<p class="dim">${n} ${n === 1 ? 'hit' : 'hits'}${n > out.length ? `, first ${out.length} shown` : ''}</p>` + out.join('') : '<p class="dim">No hits</p>';
 }
+// The report is drawn by pdf.js, page by page when it comes into view, the same in every browser.
+const ZOOM = [1, 1.5, 2, 3];
+let observer = null;
+async function view(keep) {
+  const box = $('#pages'), f = S.report;
+  if (!box || !f) return;
+  if (f.doc === false) { box.innerHTML = `<p class="dim">The report could not be shown here. <a href="${f.url}" target="_blank" rel="noopener">Open it in a new tab</a></p>`; return; }
+  if (!f.doc) { box.innerHTML = '<p class="dim">Reading the report</p>'; return; }
+  const doc = f.doc, first = (await doc.getPage(1)).getViewport({ scale: 1 });
+  if (observer) observer.disconnect();
+  box.innerHTML = '';
+  for (let i = 1; i <= doc.numPages; i++) {
+    const d = document.createElement('div');
+    d.className = 'pg'; d.dataset.n = i;
+    d.style.width = `${S.zoom * 100}%`; d.style.aspectRatio = `${first.width} / ${first.height}`;
+    box.appendChild(d);
+  }
+  observer = new IntersectionObserver((list) => list.forEach((x) => { if (x.isIntersecting && !x.target.dataset.done) { x.target.dataset.done = 1; draw(doc, x.target); } }), { root: box, rootMargin: '800px 0px' });
+  box.querySelectorAll('.pg').forEach((d) => observer.observe(d));
+  if (keep) goPage(keep);
+}
+async function draw(doc, d) {
+  const page = await doc.getPage(+d.dataset.n), one = page.getViewport({ scale: 1 });
+  d.style.aspectRatio = `${one.width} / ${one.height}`;
+  const vp = page.getViewport({ scale: (d.clientWidth / one.width) * (window.devicePixelRatio || 1) });
+  const c = document.createElement('canvas');
+  c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  d.appendChild(c);
+  await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+}
+function current() {
+  const box = $('#pages'); if (!box) return 1;
+  const top = box.getBoundingClientRect().top;
+  const pg = [...box.querySelectorAll('.pg')].find((d) => d.getBoundingClientRect().bottom > top + 40);
+  return pg ? +pg.dataset.n : 1;
+}
+// Pages above may change height once drawn, so the jump is repeated until the page stays in place.
 function goPage(n) {
-  const fr = $('#panel iframe');
-  if (!fr || !S.report) return;
-  const nf = fr.cloneNode(); nf.src = `${S.report.url}#page=${n}&navpanes=0&view=FitH`; fr.replaceWith(nf);
+  const box = $('#pages'), d = box && box.querySelector(`.pg[data-n="${n}"]`);
+  if (!d) return;
+  let tries = 0;
+  const go = () => { box.scrollTop += d.getBoundingClientRect().top - box.getBoundingClientRect().top; if (++tries < 6) setTimeout(go, 150); };
+  go();
 }
 
 // Removing a file. Removing the MEP model also clears what was read from it.
@@ -248,8 +289,8 @@ function panel() {
   el.hidden = false;
   if (el.dataset.url !== f.url) {
     el.dataset.url = f.url;
-    el.innerHTML = `<div class="bar"><span class="name">${esc(f.name)}</span><button class="x" data-act="closereport" aria-label="Close the report">${X}</button></div><div class="find"><input id="q" data-search placeholder="Search the report" value="${esc(S.q)}"></div><div id="hits"></div><iframe title="Report" src="${f.url}#navpanes=0&view=FitH"></iframe>`;
-    hits();
+    el.innerHTML = `<div class="bar"><span class="name">${esc(f.name)}</span><span class="tools"><button data-zoom="-1" aria-label="Smaller">−</button><button data-zoom="1" aria-label="Larger">+</button><button class="x" data-act="closereport" aria-label="Close the report">${X}</button></span></div><div class="find"><input id="q" data-search placeholder="Search the report" value="${esc(S.q)}"></div><div id="hits"></div><div id="pages"></div>`;
+    hits(); view();
   }
 }
 function scaleThumbs() {
@@ -314,6 +355,7 @@ document.addEventListener('click', (e) => {
   else if (d.report) { const f = S.files[+d.report]; S.report = S.report === f ? null : f; render(); return; }
   else if (d.rmfile) { drop(S.files[+d.rmfile]); render(); return; }
   else if (d.page) { goPage(+d.page); return; }
+  else if (d.zoom) { const n = current(), i = ZOOM.indexOf(S.zoom) + +d.zoom; if (i >= 0 && i < ZOOM.length) { S.zoom = ZOOM[i]; view(n); } return; }
   else if (d.editk) S.editing = d.editk;
   else if (d.reset) { delete st.edits[d.reset]; S.editing = null; }
   else if (d.opt) st.optional[d.opt] = st.optional[d.opt] === false;
