@@ -37,7 +37,8 @@ header nav a.on { color: var(--ink); }
 .row .l, .row .v { height: 46px; white-space: nowrap; overflow: hidden; }
 .row .v { grid-column: 9 / span 4; padding: 0 14px; }
 .row .v > span:first-child > span:first-child { overflow: hidden; text-overflow: ellipsis; }
-.row .v.stack { flex-direction: column; align-items: flex-start; justify-content: center; padding-top: 10px; padding-bottom: 10px; }
+.row .v.stack { flex-direction: column; align-items: flex-start; justify-content: center; padding-top: 10px; padding-bottom: 10px; height: auto; white-space: normal; }
+.row .v.stack > span:first-child { align-items: flex-start; }
 .storeys { display: grid; grid-template-columns: auto auto; gap: 2px 18px; padding: 4px 0; }
 .storeys b { font-weight: 400; text-align: right; }
 .row.in .v { background: var(--surface); }
@@ -136,6 +137,6 @@ body.split .row .v { height: auto; min-height: 46px; white-space: normal; }
 <div id="panel" hidden></div>
 <div id="print" class="doc"></div>
 <input id="file" type="file" accept=".ifc,.pdf" multiple hidden>
-<script type="module" src="./app.js?v=0d36576"></script>
+<script type="module" src="./app.js?v=0332482"></script>
 </body>
 </html>

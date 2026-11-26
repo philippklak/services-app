@@ -1,8 +1,8 @@
 // Services, document: the three 16:9 pages (Overview, Systems, Performance) as HTML strings.
 // No DOM in here. The same markup is the print view of the app and services.html in the download.
-import { fmt } from './core.js?v=0d36576';
-import { FIELDS, COLOR } from './pictos.js?v=0d36576';
-import { display, isEmpty } from './data.js?v=0d36576';
+import { fmt } from './core.js?v=0332482';
+import { FIELDS, COLOR } from './pictos.js?v=0332482';
+import { display, isEmpty } from './data.js?v=0332482';
 
 // Same rules as pdf-example.html, scoped under .doc so the app can use it next to its own styles.
 export const DOC_CSS = `
