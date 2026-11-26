@@ -1,6 +1,6 @@
 // Services, pictograms: isometric line drawings as SVG strings from the result of core.analyze.
 // No DOM in here, runs in the browser and in Node. Same view and scale in every image of a project.
-import { GROUPS } from './core.js?v=8df50eb';
+import { GROUPS } from './core.js?v=0d36576';
 
 // The overview and the eight fields of the grid, in reading order.
 export const FIELDS = [
@@ -72,7 +72,7 @@ export function draw(m, sel, opt = {}) {
   // elements, so an upper storey covers what lies below it.
   const plate = (l) => {
     const q = [[0, l.z, 0], [S[0], l.z, 0], [S[0], l.z, S[2]], [0, l.z, S[2]]].map(P).map((c) => f(c[0]) + ',' + f(c[1])).join(' ');
-    return `<polygon points="${q}" fill="#e9e9e6" fill-opacity="0.34" stroke="${PLATE}" stroke-width="0.08"/>`;
+    return `<polygon points="${q}" fill="#e9e9e6" fill-opacity="0.12" stroke="${PLATE}" stroke-width="0.08"/>`;
   };
   const layers = m.levels.map(() => ({ grey: '', front: '' }));
   for (const e of m.elements) {
@@ -95,7 +95,7 @@ export function draw(m, sel, opt = {}) {
     const L = layers[Math.min(layers.length - 1, e.level || 0)];
     if (on) L.front += s; else L.grey += s;
   }
-  const body = m.levels.map((l, i) => (opt.storeys !== 'hidden' && l.n >= 10 ? plate(l) : '') + layers[i].grey + layers[i].front).join('');
+  const body = m.levels.map((l, i) => (opt.storeys !== 'hidden' ? plate(l) : '') + layers[i].grey + layers[i].front).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.text}">${body}</svg>`;
 }
 

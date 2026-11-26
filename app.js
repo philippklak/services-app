@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=8df50eb';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse } from './data.js?v=8df50eb';
-import { FIELDS, pictograms } from './pictos.js?v=8df50eb';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=8df50eb';
+import { analyze, fmt } from './core.js?v=0d36576';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=0d36576';
+import { FIELDS, pictograms } from './pictos.js?v=0d36576';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=0d36576';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=8df50eb');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=8df50eb', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=0d36576');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=0d36576', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +89,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=8df50eb'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=0d36576'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -230,6 +230,7 @@ const docCtx = () => ({ m: S.model, values: buildValues(S.model, S.state), svgs:
 const head = (t, p) => `<div class="grid head"><h1>${t}</h1><p>${p}</p></div>`;
 const block = (name, sub, body) => `<div class="grid block"><div class="sec"><span>${name}</span><span class="small dim">${sub}</span></div>${body}</div>`;
 const row = (l, v, cls = '') => `<div class="row ${cls}"><span class="l">${l}</span><span class="v">${v}</span></div>`;
+const stackRow = (l, v, sub, cls = '') => `<div class="row ${cls}"><span class="l">${l}</span><span class="v stack"><span>${v}</span><span class="small dim">${sub}</span></span></div>`;
 const noModel = () => block('Model', 'none yet', `<p class="note">Add the MEP model of the project on the page Files first.</p>`);
 
 function pageFiles() {
@@ -241,15 +242,18 @@ function pageFiles() {
     `<button class="fill drop" data-act="choose"><span class="small dim">Drop the models and reports of the project here or choose them</span><b>${S.files.length} ${S.files.length === 1 ? 'file' : 'files'}</b></button>` +
     S.files.map((f, i) => row(esc(f.name), `<span>${what(f)}</span><button class="edit x" data-rmfile="${i}" title="Remove" aria-label="Remove ${esc(f.name)}">${X}</button>`, f.kind === 'mep' || f.kind === 'pdf' || f.status === 'reading' ? '' : 'off')).join(''));
   if (!m) return h;
+  const kinds = m.groups.filter((g) => g.count && g.id !== 'other').length;
   h += block('Content', `read in ${(m.ms / 1000).toFixed(1)} s`,
-    row('Schema', esc(m.schema || 'unknown')) + row('Elements', fmt(m.elements.length)) + row('Systems', fmt(m.systems.length)) + row('Storeys', fmt(m.storeys.length)));
+    row('Schema', esc(m.schema || 'unknown')) + row('Elements', fmt(m.elements.length)) +
+    stackRow('Systems', `${fmt(m.systems.length)} in the file`, `sorted into ${kinds} kinds on the page Data`) +
+    stackRow('Storeys', fmt(m.storeys.length), esc(m.levels.map((l) => storeyName(l.name)).join(', '))));
   const inSys = m.elements.length - m.unassigned, named = m.systems.filter((s) => s.cat).length;
-  const checks = [inSys === m.elements.length, named === m.systems.length && m.systems.length > 0, m.storeys.length > 0];
+  const checks = [inSys === m.elements.length, named === m.systems.length && m.systems.length > 0, m.storeys.length > 1];
   h += block('Check for required data', `${checks.filter(Boolean).length} of 3 met`,
-    row('Every element belongs to a system', `${fmt(inSys)} of ${fmt(m.elements.length)}`, checks[0] ? '' : 'off') +
-    row('System names can be read', `${fmt(named)} of ${fmt(m.systems.length)}`, checks[1] ? '' : 'off') +
-    row('Storeys are defined', fmt(m.storeys.length), checks[2] ? '' : 'off') +
-    row('Air terminals are modelled', m.terminals ? fmt(m.terminals) : 'none, optional data only', m.terminals ? '' : 'off'));
+    stackRow('Every element belongs to a system', `${fmt(inSys)} of ${fmt(m.elements.length)}`, 'for the kinds, the lengths and the images', checks[0] ? '' : 'off') +
+    stackRow('System names can be read', `${fmt(named)} of ${fmt(m.systems.length)}`, 'to sort the systems into kinds', checks[1] ? '' : 'off') +
+    stackRow('Storeys are defined', fmt(m.storeys.length), 'for the risers and the storeys in the images', checks[2] ? '' : 'off') +
+    stackRow('Air terminals are modelled', m.terminals ? fmt(m.terminals) : 'none', 'optional, drawn in the images', m.terminals ? '' : 'off'));
   return h;
 }
 
@@ -261,9 +265,18 @@ function modelRow(v, label) {
     const was = isEmpty(v.model) ? 'n/a' : display({ ...v, value: v.model });
     return row(label, `<input data-k="edit:${v.key}" data-edit="${v.key}" value="${esc(cur)}"><span class="edit small dim">${v.def.kind === 'calc' ? 'calculated' : 'model'} ${esc(was)},&nbsp;<button data-reset="${v.key}">reset</button></span>`, 'in');
   }
-  if (isEmpty(v.value)) return row(label, v.def.needsText || (v.def.needs ? 'needs the floor area' : 'n/a'), 'off');
-  const sub = v.formula || ''; // the formula of a calculated value, other details go into the note column of the export
-  const text = esc(display(v)) + (typeof v.value === 'number' ? unit : '');
+  if (isEmpty(v.value)) {
+    if (v.total) return stackRow(label, `${esc(v.total)} in all`, 'per m² needs the heated floor area', 'off');
+    return row(label, v.def.needsText || (v.def.needs ? 'needs the floor area' : 'n/a'), 'off');
+  }
+  // under the value: the formula of a calculated value, the kinds of the systems, the total of the risers
+  let sub = v.formula || '';
+  let text = esc(display(v)) + (typeof v.value === 'number' ? unit : '');
+  if (v.key === 'system_kinds' && v.source === 'model') sub = v.note;
+  if (v.key === 'risers_per_storey' && v.source === 'model' && v.list) {
+    text = `<span class="storeys">${v.list.slice().reverse().map((x) => `<span>${esc(x.storey)}</span><b>${x.count}</b>`).join('')}</span>`;
+    sub = `${v.total} risers in all, each counted on every storey it connects`;
+  }
   return `<div class="row"><span class="l">${label}</span><span class="v${sub ? ' stack' : ''}"><span style="display:flex;width:100%"><span>${text}</span><button class="edit small dim" data-editk="${v.key}">${PEN}Edit</button></span>${sub ? `<span class="small dim">${esc(sub)}</span>` : ''}</span></div>`;
 }
 
@@ -516,4 +529,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = '8df50eb';
+window.SERVICES_VERSION = '0d36576';
