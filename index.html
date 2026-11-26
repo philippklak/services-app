@@ -23,7 +23,7 @@ input::placeholder { color: var(--dim); }
 header { padding-bottom: 56px; align-items: baseline; }
 header .brand { grid-column: 1 / span 3; }
 header nav { grid-column: 4 / span 9; display: flex; gap: 0 40px; }
-header nav a { color: var(--dim); text-decoration: none; }
+header nav a { color: var(--dim); text-decoration: none; white-space: nowrap; }
 header nav a.on { color: var(--ink); }
 .head { align-items: start; min-height: 132px; }
 .head h1 { grid-column: 4 / span 5; margin: 0; font-size: 56px; line-height: 1; font-weight: 400; }
@@ -39,7 +39,8 @@ header nav a.on { color: var(--ink); }
 .row .v > span:first-child > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .row .v.stack { flex-direction: column; align-items: flex-start; justify-content: center; padding-top: 10px; padding-bottom: 10px; }
 .row.in .v { background: var(--surface); }
-.sug { grid-column: 9 / span 4; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 2px 14px 10px; margin-top: -2px; }
+.sug { grid-column: 9 / span 4; display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; align-items: baseline; justify-items: start; padding: 2px 14px 10px; margin-top: -2px; }
+.sug > :first-child { grid-row: 1 / span 3; }
 .sug button { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .sug button .dim { text-decoration: none; }
 .row.off .l, .row.off .v { color: var(--dim); }
@@ -76,6 +77,7 @@ header nav a.on { color: var(--ink); }
 .btn { grid-column: 9 / span 4; min-height: 46px; display: flex; align-items: center; padding: 0 14px; background: var(--ink); color: #fff; margin-bottom: 4px; }
 .btn.light { background: var(--surface); color: var(--ink); }
 .note { grid-column: 4 / span 5; margin: 0; align-self: center; color: var(--dim); font-size: 14px; }
+.block > .note { align-self: start; padding-top: 12px; } /* on the line of the section title, like a row */
 #print { display: none; }
 .x { display: inline-flex; align-items: center; color: var(--dim); }
 .x:hover { color: var(--ink); }
@@ -100,7 +102,11 @@ header nav a.on { color: var(--ink); }
 #hits button:hover { color: var(--ink); background: #e2e2df; }
 body.split .page { max-width: none; margin: 0 46vw 0 0; }
 body.split .row .l { height: auto; min-height: 46px; white-space: normal; padding: 6px 0; }
-@media (max-width: 760px) { .grid > *, .row .l, .row .v, .sug, .seg, .btn, .note { grid-column: 1 / -1 !important; } .sec { grid-row: auto; padding-bottom: 8px; } .head h1 { font-size: 44px; } }
+/* next to the report the page is narrow: the values get one column more, long values wrap instead of being cut */
+body.split .row .l, body.split .note, body.split .head h1 { grid-column: 4 / span 4; }
+body.split .row .v, body.split .sug, body.split .head p, body.split .btn { grid-column: 8 / span 5; }
+body.split .row .v { height: auto; min-height: 46px; white-space: normal; }
+@media (max-width: 760px) { header nav { gap: 0 18px; flex-wrap: wrap; } #panel { width: 100vw; left: 0; } body.split .page { margin: 0 auto; } .grid > *, .row .l, .row .v, .sug, .seg, .btn, .note { grid-column: 1 / -1 !important; } .sec { grid-row: auto; padding-bottom: 8px; } .head h1 { font-size: 44px; } }
 @media print {
   #panel { display: none !important; }
   @page { size: 1280px 720px; margin: 0; }
@@ -128,6 +134,6 @@ body.split .row .l { height: auto; min-height: 46px; white-space: normal; paddin
 <div id="panel" hidden></div>
 <div id="print" class="doc"></div>
 <input id="file" type="file" accept=".ifc,.pdf" multiple hidden>
-<script type="module" src="./app.js?v=19576ca"></script>
+<script type="module" src="./app.js?v=8df50eb"></script>
 </body>
 </html>

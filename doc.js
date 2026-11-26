@@ -1,8 +1,8 @@
 // Services, document: the three 16:9 pages (Overview, Systems, Performance) as HTML strings.
 // No DOM in here. The same markup is the print view of the app and services.html in the download.
-import { fmt } from './core.js?v=19576ca';
-import { FIELDS, COLOR } from './pictos.js?v=19576ca';
-import { display, isEmpty } from './data.js?v=19576ca';
+import { fmt } from './core.js?v=8df50eb';
+import { FIELDS, COLOR } from './pictos.js?v=8df50eb';
+import { display, isEmpty } from './data.js?v=8df50eb';
 
 // Same rules as pdf-example.html, scoped under .doc so the app can use it next to its own styles.
 export const DOC_CSS = `
@@ -61,7 +61,7 @@ export function pages(ctx) {
     <div class="val"><span class="small dim">Floor area</span><span class="big">${out(v.floor_area, 'm²')}</span></div>
   </div>
   ${side}
-  <div class="foot small dim">From the MEP model ${esc(m.file)}. Floor area entered by hand.</div>
+  <div class="foot small dim">From the MEP model ${esc(m.file)}.${isEmpty(v.floor_area.value) ? ' Per m² values need the floor area.' : ' Floor area entered by hand.'}</div>
   <div class="pg small dim">1 of 3</div>
 </div>`;
   const cells = fields.map((f) => {
