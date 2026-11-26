@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=fd51118';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=fd51118';
-import { FIELDS, pictograms } from './pictos.js?v=fd51118';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=fd51118';
+import { analyze, fmt } from './core.js?v=3ec9379';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=3ec9379';
+import { FIELDS, pictograms } from './pictos.js?v=3ec9379';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=3ec9379';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=fd51118');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=fd51118', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=3ec9379');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=3ec9379', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +89,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=fd51118'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=3ec9379'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -456,7 +456,7 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('button');
   if (!t) return;
   const st = S.state, d = t.dataset;
-  if (d.act === 'choose') { if (VIDEO && PRE.size) videoDrop(); else $('#file').click(); }
+  if (d.act === 'choose') { if (VIDEO) videoDrop(); else $('#file').click(); } // the recording mode never opens the file dialog
   else if (d.act === 'addown') st.own.push({ label: '', value: '', unit: '' });
   else if (d.act === 'reset') { if (!confirm('Reset all inputs and corrections of this project?')) return; S.state = emptyState(); S.pics = null; }
   else if (d.act === 'download') { download(); return; }
@@ -531,10 +531,12 @@ if (VIDEO) {
   // locally the models lie next to the app. On the live app they come from video-server.py on this Mac.
   const from = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? './samples/' : 'http://127.0.0.1:8768/';
   history.replaceState(null, '', location.pathname + location.hash); // the address bar shows the plain address
-  Promise.all([ifc, pdf].map((n) => fetch(from + n).then((r) => { if (!r.ok) throw new Error(n); return r.arrayBuffer(); }).then((b) => { bufs[n] = b; })))
+  window.videoReady = Promise.all([ifc, pdf].map((n) => fetch(from + n).then((r) => { if (!r.ok) throw new Error(n); return r.arrayBuffer(); }).then((b) => { bufs[n] = b; })))
     .then(async () => { PRE.set(ifc, analyze(WebIFC, await engine(), new Uint8Array(bufs[ifc]), ifc)); document.body.classList.add('ready'); })
     .catch((e) => console.error('video mode', e));
-  window.videoDrop = () => {
+  window.videoDrop = async () => {
+    await window.videoReady; // a click before the model is read waits instead of failing
+    if (!PRE.size) return;
     location.hash = 'files';
     addFile(ifc, bufs[ifc].byteLength, async () => bufs[ifc]);
     setTimeout(() => addFile(pdf, bufs[pdf].byteLength, async () => bufs[pdf].slice(0)), 250);
@@ -547,4 +549,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'fd51118';
+window.SERVICES_VERSION = '3ec9379';
