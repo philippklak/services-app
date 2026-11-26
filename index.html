@@ -8,7 +8,7 @@
 /* White page, one grey surface, one grey for secondary text, black. No lines, no capitals.
    12 columns. Column 1 to 3: section names. Column 4 to 8: labels. Column 9 to 12: values.
    A grey surface always means: you can enter or choose something here. Plain text was read from the model. */
-:root { --ink: #000; --dim: #8a8a8a; --surface: #ededeb; --g: 24px; }
+:root { --ink: #000; --dim: #8a8a8a; --surface: #f4f4f2; --g: 24px; }
 * { box-sizing: border-box; }
 html { overflow-y: scroll; }
 html, body { margin: 0; background: #fff; color: var(--ink); font-family: "DIN 1451 Std", "DIN 1451 Mittelschrift", "DIN Alternate", "Univers LT Std", "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 18px; line-height: 1.3; }
@@ -43,9 +43,8 @@ header nav a.on { color: var(--ink); }
 .storeys b { font-weight: 400; text-align: right; }
 .row.in .v { background: var(--surface); }
 .row .l.withsug { grid-row: span 2; }
-.sug > :first-child { grid-row: 1 / span 3; }
 .row .l { height: auto !important; white-space: normal !important; padding: 12px 0; line-height: 1.25; min-height: 46px; }
-.sug { grid-column: 9 / span 4; align-self: start; display: grid; grid-template-columns: auto 1fr; justify-items: start; align-items: baseline; gap: 2px 14px; padding: 0 14px 12px; margin: -4px 0 4px; background: var(--surface); }
+.sug { grid-column: 9 / span 4; align-self: start; display: flex; flex-wrap: nowrap; align-items: baseline; gap: 14px; padding: 0 14px; margin: -2px 0 8px; white-space: nowrap; overflow: hidden; }
 .sug button { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .sug button .dim { text-decoration: none; }
 .row.off .l, .row.off .v { color: var(--dim); }
@@ -139,6 +138,6 @@ body.split .row .v { height: auto; min-height: 46px; white-space: normal; }
 <div id="panel" hidden></div>
 <div id="print" class="doc"></div>
 <input id="file" type="file" accept=".ifc,.pdf" multiple hidden>
-<script type="module" src="./app.js?v=e69ceb1"></script>
+<script type="module" src="./app.js?v=dea7d92"></script>
 </body>
 </html>

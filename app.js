@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=e69ceb1';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=e69ceb1';
-import { FIELDS, pictograms } from './pictos.js?v=e69ceb1';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=e69ceb1';
+import { analyze, fmt } from './core.js?v=dea7d92';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=dea7d92';
+import { FIELDS, pictograms } from './pictos.js?v=dea7d92';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=dea7d92';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=e69ceb1');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=e69ceb1', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=dea7d92');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=dea7d92', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +89,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=e69ceb1'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=dea7d92'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -293,12 +293,13 @@ function sugLine(v, raw, html) {
   if (!list.length) return html;
   const same = (c) => (typeof c.value === 'number' ? parse(raw) === c.value : raw === c.value);
   const id = (c) => { const k = SUG.size; SUG.set(String(k), { key: v.key, c }); return k; };
-  const where = (c) => `p. ${c.page}${c.kind === 'table' ? ', highest in a table' : ''}`.replace('highest', v.key === 'time_in_category_2' ? 'lowest' : 'highest');
-  const val = (c) => esc(typeof c.value === 'number' ? fmt(c.value, Number.isInteger(c.value) ? 0 : String(c.value).split('.')[1].length) : c.value) + (typeof c.value === 'number' && v.unit ? ' ' + esc(v.unit) : '');
+  // short, one line: value and page. Where it was found (a table, the highest value) goes into the tooltip.
+  const tip = (c) => `Page ${c.page}` + (c.kind === 'table' ? `, ${v.key === 'time_in_category_2' ? 'lowest' : 'highest'} value in a table` : '');
+  const val = (c) => esc(typeof c.value === 'number' ? fmt(c.value, Number.isInteger(c.value) ? 0 : String(c.value).split('.')[1].length) : c.value);
   const hit = list.find(same);
   const body = hit
-    ? `<span class="dim">In the report, ${where(hit)}</span><button data-sugshow="${id(hit)}">show</button>`
-    : `<span class="dim">From the report</span>` + list.map((c) => `<button data-sug="${id(c)}" title="Fill in and show in the report">${val(c)}<span class="dim">, ${where(c)}</span></button>`).join('');
+    ? `<span class="dim">Report p. ${hit.page}</span><button data-sugshow="${id(hit)}" title="${tip(hit)}">show</button>`
+    : `<span class="dim">Report</span>` + list.slice(0, 2).map((c) => `<button data-sug="${id(c)}" title="Fill in and show in the report. ${tip(c)}">${val(c)}<span class="dim"> p. ${c.page}</span></button>`).join('');
   // the label spans the field and the suggestion, so the suggestion sits right under the field
   return html.replace('<span class="l"', '<span class="l withsug"') + `<div class="sug small">${body}</div>`;
 }
@@ -530,4 +531,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'e69ceb1';
+window.SERVICES_VERSION = 'dea7d92';
