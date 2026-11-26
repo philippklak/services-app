@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=3ec9379';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=3ec9379';
-import { FIELDS, pictograms } from './pictos.js?v=3ec9379';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=3ec9379';
+import { analyze, fmt } from './core.js?v=02a6d9f';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=02a6d9f';
+import { FIELDS, pictograms } from './pictos.js?v=02a6d9f';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=02a6d9f';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -39,7 +39,11 @@ function save() { if (!S.model || VIDEO) return; try { localStorage.setItem(stor
 // ---- files: the IFC with building services is found by its content, not by its name
 // ---- recording mode (?video, local only): 26-06 is read in advance, one click on the drop field adds
 // the model and the report, the report values are filled in as in the example PDF. Nothing is saved.
-const VIDEO = new URLSearchParams(location.search).has('video');
+// The recording mode stays on in this tab after a reload, although ?video is taken out of the address.
+const VIDEO = (() => {
+  const on = new URLSearchParams(location.search).has('video');
+  try { if (on) sessionStorage.setItem('services-video', '1'); return on || sessionStorage.getItem('services-video') === '1'; } catch (e) { return on; }
+})();
 const PRE = new Map();
 const VIDEO_INPUTS = { building_use: 'other buildings', energy_be18: '40.9', daylight_sda300: 'met', hours_above_27: '0.1', co2_max: '1219', floor_area: '4645' }; // heated area, MAT report 26-06 p. 23 (GFA is 6134)
 const isMEP = (m) => m.elements.filter((e) => e.seg).length >= 10;
@@ -78,8 +82,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=3ec9379');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=3ec9379', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=02a6d9f');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=02a6d9f', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +93,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=3ec9379'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=02a6d9f'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -533,7 +537,12 @@ if (VIDEO) {
   history.replaceState(null, '', location.pathname + location.hash); // the address bar shows the plain address
   window.videoReady = Promise.all([ifc, pdf].map((n) => fetch(from + n).then((r) => { if (!r.ok) throw new Error(n); return r.arrayBuffer(); }).then((b) => { bufs[n] = b; })))
     .then(async () => { PRE.set(ifc, analyze(WebIFC, await engine(), new Uint8Array(bufs[ifc]), ifc)); document.body.classList.add('ready'); })
-    .catch((e) => console.error('video mode', e));
+    .catch((e) => {
+      console.error('video mode', e);
+      // shown on the page, so a failure can be seen without the console
+      const b = document.createElement('p'); b.className = 'small'; b.style.cssText = 'position:fixed;left:16px;bottom:12px;color:#c00';
+      b.textContent = 'Recording mode could not load the example: ' + (e && e.message || e); document.body.appendChild(b);
+    });
   window.videoDrop = async () => {
     await window.videoReady; // a click before the model is read waits instead of failing
     if (!PRE.size) return;
@@ -549,4 +558,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = '3ec9379';
+window.SERVICES_VERSION = '02a6d9f';
