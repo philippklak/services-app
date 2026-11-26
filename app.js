@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=a81dae4';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=a81dae4';
-import { FIELDS, pictograms } from './pictos.js?v=a81dae4';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=a81dae4';
+import { analyze, fmt } from './core.js?v=f83b579';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=f83b579';
+import { FIELDS, pictograms } from './pictos.js?v=f83b579';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=f83b579';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=a81dae4');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=a81dae4', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=f83b579');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=f83b579', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +89,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=a81dae4'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=f83b579'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -266,8 +266,17 @@ function modelRow(v, label) {
     return row(label, `<input data-k="edit:${v.key}" data-edit="${v.key}" value="${esc(cur)}"><span class="edit small dim">${v.def.kind === 'calc' ? 'calculated' : 'model'} ${esc(was)},&nbsp;<button data-reset="${v.key}">reset</button></span>`, 'in');
   }
   if (isEmpty(v.value)) {
-    if (v.total) return stackRow(label, `${esc(v.total)} in all`, 'per m² needs the heated floor area', 'off');
-    return row(label, v.def.needsText || (v.def.needs ? 'needs the floor area' : 'n/a'), 'off');
+    // what is missing, as links to the field where it goes
+    const go = (k, t) => `<button class="go" data-focus="${k}">${t}</button>`;
+    const area = go('floor_area', 'enter floor area');
+    if (v.total) return stackRow(label, `${esc(v.total)} in all`, `per m², ${area}`, 'off');
+    if (v.def.kind === 'calc') {
+      const miss = [];
+      if (!S.state.inputs.building_use) miss.push(go('building_use', 'choose building use'));
+      if (isEmpty(parse(S.state.inputs.floor_area))) miss.push(area);
+      return row(label, `<span>${miss.join(' and ')}</span>`, 'off');
+    }
+    return row(label, v.def.needs ? area : 'n/a', 'off');
   }
   // under the value: the formula of a calculated value, the kinds of the systems
   let sub = v.formula || '';
@@ -457,6 +466,7 @@ document.addEventListener('click', (e) => {
     if (d.sug) { st.inputs[it.key] = typeof it.c.value === 'number' ? String(it.c.value) : it.c.value; save(); }
     showFind(it.c); return;
   }
+  else if (d.focus) { const el = document.querySelector(`[data-in="${d.focus}"]`); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); if (el.tagName === 'SELECT' && el.showPicker) try { el.showPicker(); } catch (x) {} } return; }
   else if (d.sugclear) delete st.inputs[d.sugclear];
   else if (d.zoom) { const n = current(), i = ZOOM.indexOf(S.zoom) + +d.zoom; if (i >= 0 && i < ZOOM.length) { S.zoom = ZOOM[i]; view(n); } return; }
   else if (d.editk) S.editing = d.editk;
@@ -530,4 +540,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'a81dae4';
+window.SERVICES_VERSION = 'f83b579';
