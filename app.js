@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=ba163e2';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=ba163e2';
-import { FIELDS, pictograms } from './pictos.js?v=ba163e2';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=ba163e2';
+import { analyze, fmt } from './core.js?v=ab351ef';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=ab351ef';
+import { FIELDS, pictograms } from './pictos.js?v=ab351ef';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=ab351ef';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=ba163e2');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=ba163e2', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=ab351ef');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=ab351ef', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +89,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=ba163e2'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=ab351ef'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -372,7 +372,7 @@ function pageExport() {
     item('all', 'All files', `services-${esc(m.id)}.zip`) + item('csv', 'data.csv', `${rows.length} values with unit and source`) + item('json', 'data.json', 'the same values for scripts') +
     item('images', 'images/', `${FIELDS.length} images as SVG and PNG`) + item('html', 'services.html', '3 pages, opens in any browser'));
   h += `<div class="grid"><p class="note">${empty ? `${empty} required ${empty === 1 ? 'value is' : 'values are'} still empty. ${empty === 1 ? 'It is' : 'They are'} exported as n/a.` : 'All required values are filled in.'}</p><button class="btn" data-act="download"${n ? '' : ' disabled'}>Download</button></div>`;
-  h += `<div class="grid"><p class="note">The document as PDF: choose Save as PDF in the print dialog.</p><button class="btn light" data-act="print">Print PDF</button></div>`;
+  h += `<div class="grid"><p class="note">The document as PDF: choose Save as PDF in the print dialog. Use Chrome, Safari or Firefox, the pages are landscape 16:9.</p><button class="btn light" data-act="print">Print PDF</button></div>`;
   return h;
 }
 
@@ -444,6 +444,10 @@ async function download() {
 }
 function print() {
   $('#print').innerHTML = pages(docCtx()).join('');
+  // the browser names the PDF after the page title: services-26-06.pdf
+  const was = document.title;
+  document.title = `services-${S.model ? S.model.id : 'project'}`;
+  window.addEventListener('afterprint', () => { document.title = was; }, { once: true });
   window.print();
 }
 
@@ -540,4 +544,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'ba163e2';
+window.SERVICES_VERSION = 'ab351ef';
