@@ -1,8 +1,8 @@
 // Services, document: the three 16:9 pages (Overview, Systems, Performance) as HTML strings.
 // No DOM in here. The same markup is the print view of the app and services.html in the download.
-import { fmt } from './core.js?v=cdf17c3';
-import { FIELDS, COLOR } from './pictos.js?v=cdf17c3';
-import { display, isEmpty } from './data.js?v=cdf17c3';
+import { fmt } from './core.js?v=a81dae4';
+import { FIELDS, COLOR } from './pictos.js?v=a81dae4';
+import { display, isEmpty } from './data.js?v=a81dae4';
 
 // Same rules as pdf-example.html, scoped under .doc so the app can use it next to its own styles.
 export const DOC_CSS = `
@@ -47,8 +47,6 @@ export function pages(ctx) {
   const side = `<div class="sidefoot"><span>Services</span><br><span class="small dim">Project ${esc(m.id)}</span></div>`;
   const fields = FIELDS.filter((f) => f.id !== 'all');
   const legend = fields.map((f) => `<span><i class="sw" style="background:${col(f.id)}"></i>${f.label}</span>`).join('');
-  const ris = v.risers_per_storey;
-  const risText = ris.source === 'model' ? (ris.value ? esc(String(ris.value).split(', ').map((s) => s.split(' ').pop()).join(', ')) : '<span class="dim">n/a</span>') : out(ris);
   const kinds = v.system_kinds;
   const p1 = `<div class="sheet">
   <div class="side"><h1>Overview</h1><div class="legend">${legend}</div></div>
@@ -57,7 +55,6 @@ export function pages(ctx) {
     <div class="val"><span class="small dim">Service systems</span><span class="big">${isEmpty(kinds.value) ? '<span class="dim">n/a</span>' : esc(typeof kinds.value === 'number' ? kinds.value + ' kinds' : kinds.value)}</span></div>
     <div class="val"><span class="small dim">Ducts and pipes per m² floor area</span><span class="big">${out(v.length_per_m2, 'm')}</span></div>
     <div class="val"><span class="small dim">Volume of ducts and pipes per m² floor area</span><span class="big">${out(v.volume_per_m2, 'm³')}</span></div>
-    <div class="val"><span class="small dim">Risers per storey, lowest first</span><span class="big">${risText}</span></div>
     <div class="val"><span class="small dim">Floor area</span><span class="big">${out(v.floor_area, 'm²')}</span></div>
   </div>
   ${side}

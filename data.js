@@ -1,8 +1,8 @@
 // Services, data: the values of one project and their export as CSV and JSON. No DOM in here.
 // Every value has key, label, value, unit, level (required, optional, own), source (model, report, manual)
 // and model_value when a model value was corrected. Empty values are exported as n/a, never estimated.
-import { fmt } from './core.js?v=cdf17c3';
-import { FIELDS } from './pictos.js?v=cdf17c3';
+import { fmt } from './core.js?v=a81dae4';
+import { FIELDS } from './pictos.js?v=a81dae4';
 
 export const LABEL = Object.fromEntries(FIELDS.map((f) => [f.id, f.label]));
 
@@ -21,14 +21,12 @@ export const REQUIRED = [
   { key: 'system_kinds', label: 'Service systems', unit: 'kinds', kind: 'model' },
   { key: 'length_per_m2', label: 'Ducts and pipes per m²', unit: 'm/m²', kind: 'model', dec: 3, needs: 'floor_area' },
   { key: 'volume_per_m2', label: 'Volume of ducts and pipes per m²', unit: 'm³/m²', kind: 'model', dec: 4, needs: 'floor_area' },
-  { key: 'risers_per_storey', label: 'Risers per storey', unit: 'count per storey', kind: 'model' },
 ];
 export const OPTIONAL = [
   { key: 'component_count', label: 'Number of components', unit: 'elements', kind: 'model' },
   { key: 'volume_total', label: 'Volume of ducts and pipes', unit: 'm³', kind: 'model', dec: 1 },
   { key: 'length_per_system', label: 'Length of ducts and pipes, all systems', unit: 'm', kind: 'model' },
 ];
-export const RISER_NOTE = 'Approximation: a riser is a vertical run of ducts or pipes that passes through a floor slab. Each storey counts the risers that pass its floor or its ceiling, lowest storey first.';
 
 // Building use decides the BR18 energy frame. It is an input of the project, not a value of its own.
 export const BUILDING_USE = ['other buildings', 'residential'];
@@ -63,35 +61,6 @@ export const storeyName = (n) => {
   return /[a-zA-Z]{2}/.test(rest) ? rest : s; // "B_00" stays, the code is all it has
 };
 
-// Risers: vertical runs of ducts and pipes that pass through a floor slab. Vertical segments at the
-// same plan position (1 m grid) are joined into one run across gaps below 1 m. A run passes a slab when
-// it reaches at least 0.5 m below and above the storey level, so short drops to a terminal do not count.
-// A storey counts every riser that passes its floor or its ceiling, that is every riser it is connected to.
-export function risers(m) {
-  const lv = m.levels;
-  if (lv.length < 2) return null;
-  const at = new Map();
-  for (const e of m.elements) {
-    if (!e.seg || !e.vertical) continue;
-    const a = e.seg.a, b = e.seg.b, k = Math.round((a[0] + b[0]) / 2) + '/' + Math.round((a[2] + b[2]) / 2);
-    if (!at.has(k)) at.set(k, []);
-    at.get(k).push([Math.min(a[1], b[1]), Math.max(a[1], b[1])]);
-  }
-  const runs = [];
-  for (const l of at.values()) {
-    l.sort((x, y) => x[0] - y[0]);
-    let c = null;
-    for (const s of l) { if (c && s[0] <= c[1] + 1) c[1] = Math.max(c[1], s[1]); else { if (c) runs.push(c); c = [s[0], s[1]]; } }
-    runs.push(c);
-  }
-  const through = (z) => runs.filter((r) => r[0] <= z - 0.5 && r[1] >= z + 0.5);
-  const storeys = lv.map((l, i) => {
-    const s = new Set([...(i > 0 ? through(l.z) : []), ...(i < lv.length - 1 ? through(lv[i + 1].z) : [])]);
-    return { storey: storeyName(l.name), count: s.size };
-  });
-  return { total: new Set(lv.slice(1).flatMap((l) => through(l.z))).size, storeys };
-}
-
 // What the model says, before any correction. floor is the floor area in m² or null.
 function fromModel(m, key, floor) {
   const used = m.groups.filter((g) => g.count && g.id !== 'other');
@@ -100,11 +69,6 @@ function fromModel(m, key, floor) {
     case 'system_kinds': return { value: used.length, note: used.map((g) => LABEL[g.id]).join(', ') };
     case 'length_per_m2': return { value: floor ? round(len / floor, 3) : null, total: `${fmt(len, 0)} m` };
     case 'volume_per_m2': return { value: floor ? round(m.volume / floor, 4) : null, total: `${fmt(m.volume, 1)} m³` };
-    case 'risers_per_storey': {
-      const r = risers(m);
-      if (!r) return { value: null, note: 'The model has no storeys.' };
-      return { value: r.storeys.map((x) => x.storey + ' ' + x.count).join(', '), note: RISER_NOTE + ` ${r.total} risers in all.`, list: r.storeys, total: r.total };
-    }
     case 'component_count': {
       const el = m.elements, segs = el.filter((e) => e.seg);
       const fit = el.filter((e) => !e.seg && !e.proxy && !e.terminal).length;
@@ -128,7 +92,7 @@ export function buildValues(m, state) {
       v.note = mv.note || '';
       v.model = mv.value;
       v.formula = mv.formula || '';
-      v.list = mv.list; v.total = mv.total;
+      v.total = mv.total;
       // a BR18 limit typed in before it was calculated counts as a correction
       const ed = st.edits[d.key] !== undefined ? st.edits[d.key] : d.kind === 'calc' ? st.inputs[d.key] : undefined;
       if (ed !== undefined && ed !== null && String(ed).trim() !== '') { v.value = parse(ed); v.source = 'manual'; v.model_value = mv.value; }

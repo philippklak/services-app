@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=cdf17c3';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=cdf17c3';
-import { FIELDS, pictograms } from './pictos.js?v=cdf17c3';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=cdf17c3';
+import { analyze, fmt } from './core.js?v=a81dae4';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=a81dae4';
+import { FIELDS, pictograms } from './pictos.js?v=a81dae4';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=a81dae4';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=cdf17c3');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=cdf17c3', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=a81dae4');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=a81dae4', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +89,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=cdf17c3'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=a81dae4'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -252,7 +252,7 @@ function pageFiles() {
   h += block('Check for required data', `${checks.filter(Boolean).length} of 3 met`,
     stackRow('Every element belongs to a system', `${fmt(inSys)} of ${fmt(m.elements.length)}`, 'for the kinds, the lengths and the images', checks[0] ? '' : 'off') +
     stackRow('System names can be read', `${fmt(named)} of ${fmt(m.systems.length)}`, 'to sort the systems into kinds', checks[1] ? '' : 'off') +
-    stackRow('Storeys are defined', fmt(m.storeys.length), 'for the risers and the storeys in the images', checks[2] ? '' : 'off') +
+    stackRow('Storeys are defined', fmt(m.storeys.length), 'for the storeys in the images', checks[2] ? '' : 'off') +
     stackRow('Air terminals are modelled', m.terminals ? fmt(m.terminals) : 'none', 'optional, drawn in the images', m.terminals ? '' : 'off'));
   return h;
 }
@@ -269,14 +269,10 @@ function modelRow(v, label) {
     if (v.total) return stackRow(label, `${esc(v.total)} in all`, 'per m² needs the heated floor area', 'off');
     return row(label, v.def.needsText || (v.def.needs ? 'needs the floor area' : 'n/a'), 'off');
   }
-  // under the value: the formula of a calculated value, the kinds of the systems, the total of the risers
+  // under the value: the formula of a calculated value, the kinds of the systems
   let sub = v.formula || '';
   let text = esc(display(v)) + (typeof v.value === 'number' ? unit : '');
   if (v.key === 'system_kinds' && v.source === 'model') sub = v.note;
-  if (v.key === 'risers_per_storey' && v.source === 'model' && v.list) {
-    text = `<span class="storeys">${v.list.slice().reverse().map((x) => `<span>${esc(x.storey)}</span><b>${x.count}</b>`).join('')}</span>`;
-    sub = `${v.total} risers in all, each counted on every storey it connects`;
-  }
   return `<div class="row"><span class="l">${label}</span><span class="v${sub ? ' stack' : ''}"><span style="display:flex;width:100%"><span>${text}</span><button class="edit small dim" data-editk="${v.key}">${PEN}Edit</button></span>${sub ? `<span class="small dim">${esc(sub)}</span>` : ''}</span></div>`;
 }
 
@@ -534,4 +530,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'cdf17c3';
+window.SERVICES_VERSION = 'a81dae4';
