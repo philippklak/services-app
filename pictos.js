@@ -1,6 +1,6 @@
 // Services, pictograms: isometric line drawings as SVG strings from the result of core.analyze.
 // No DOM in here, runs in the browser and in Node. Same view and scale in every image of a project.
-import { GROUPS } from './core.js?v=ab351ef';
+import { GROUPS } from './core.js?v=a2d2f1b';
 
 // The overview and the eight fields of the grid, in reading order.
 export const FIELDS = [

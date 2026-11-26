@@ -1,8 +1,8 @@
 // Services, data: the values of one project and their export as CSV and JSON. No DOM in here.
 // Every value has key, label, value, unit, level (required, optional, own), source (model, report, manual)
 // and model_value when a model value was corrected. Empty values are exported as n/a, never estimated.
-import { fmt } from './core.js?v=ab351ef';
-import { FIELDS } from './pictos.js?v=ab351ef';
+import { fmt } from './core.js?v=a2d2f1b';
+import { FIELDS } from './pictos.js?v=a2d2f1b';
 
 export const LABEL = Object.fromEntries(FIELDS.map((f) => [f.id, f.label]));
 
