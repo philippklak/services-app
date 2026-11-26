@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=f83b579';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=f83b579';
-import { FIELDS, pictograms } from './pictos.js?v=f83b579';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=f83b579';
+import { analyze, fmt } from './core.js?v=ba163e2';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=ba163e2';
+import { FIELDS, pictograms } from './pictos.js?v=ba163e2';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=ba163e2';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=f83b579');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=f83b579', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=ba163e2');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=ba163e2', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,7 +89,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=f83b579'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=ba163e2'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -315,8 +315,8 @@ function pageData() {
   SUG.clear();
   const m = S.model;
   const reports = S.files.filter((f) => f.kind === 'pdf' && f.url);
-  const rep = block('Report', reports.length ? 'opens next to the fields' : 'none yet', reports.length
-    ? reports.map((f) => row(esc(f.name), `<button class="edit" style="margin-left:0;padding-left:0" data-report="${S.files.indexOf(f)}">${S.report === f ? 'Close' : 'Open next to the fields'}</button>`)).join('')
+  const rep = block('Report', reports.length ? 'to read and search while filling in' : 'none yet', reports.length
+    ? reports.map((f) => `<div class="row"><span class="l">${esc(f.name)}</span><button class="btn${S.report === f ? ' light' : ''}" data-report="${S.files.indexOf(f)}">${S.report === f ? 'Close the report' : 'Open the report next to the fields'}</button></div>`).join('')
     : `<p class="note">Add the PDF report of the team on the page Files to read the values next to the fields.</p>`);
   if (!m) return head('Data', 'Values for the course, from the model and from the report of the team.') + rep + noModel();
   const vals = buildValues(m, S.state), by = Object.fromEntries(vals.map((v) => [v.key, v]));
@@ -540,4 +540,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'f83b579';
+window.SERVICES_VERSION = 'ba163e2';
