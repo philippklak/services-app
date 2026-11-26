@@ -39,6 +39,9 @@ header nav a.on { color: var(--ink); }
 .row .v > span:first-child > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .row .v.stack { flex-direction: column; align-items: flex-start; justify-content: center; padding-top: 10px; padding-bottom: 10px; }
 .row.in .v { background: var(--surface); }
+.sug { grid-column: 9 / span 4; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 2px 14px 10px; margin-top: -2px; }
+.sug button { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.sug button .dim { text-decoration: none; }
 .row.off .l, .row.off .v { color: var(--dim); }
 .v input, .v select { flex: 1; align-self: stretch; }
 .v select { cursor: pointer; }
@@ -97,7 +100,7 @@ header nav a.on { color: var(--ink); }
 #hits button:hover { color: var(--ink); background: #e2e2df; }
 body.split .page { max-width: none; margin: 0 46vw 0 0; }
 body.split .row .l { height: auto; min-height: 46px; white-space: normal; padding: 6px 0; }
-@media (max-width: 760px) { .grid > *, .row .l, .row .v, .seg, .btn, .note { grid-column: 1 / -1 !important; } .sec { grid-row: auto; padding-bottom: 8px; } .head h1 { font-size: 44px; } }
+@media (max-width: 760px) { .grid > *, .row .l, .row .v, .sug, .seg, .btn, .note { grid-column: 1 / -1 !important; } .sec { grid-row: auto; padding-bottom: 8px; } .head h1 { font-size: 44px; } }
 @media print {
   #panel { display: none !important; }
   @page { size: 1280px 720px; margin: 0; }
@@ -125,6 +128,6 @@ body.split .row .l { height: auto; min-height: 46px; white-space: normal; paddin
 <div id="panel" hidden></div>
 <div id="print" class="doc"></div>
 <input id="file" type="file" accept=".ifc,.pdf" multiple hidden>
-<script type="module" src="./app.js?v=cacdbe9"></script>
+<script type="module" src="./app.js?v=19576ca"></script>
 </body>
 </html>

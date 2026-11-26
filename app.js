@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=cacdbe9';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty } from './data.js?v=cacdbe9';
-import { FIELDS, pictograms } from './pictos.js?v=cacdbe9';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=cacdbe9';
+import { analyze, fmt } from './core.js?v=19576ca';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse } from './data.js?v=19576ca';
+import { FIELDS, pictograms } from './pictos.js?v=19576ca';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=19576ca';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=cacdbe9');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=cacdbe9', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=19576ca');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=19576ca', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -89,6 +89,8 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
+    try { const { suggestAll } = await import('./suggest.js?v=19576ca'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
 }
@@ -181,6 +183,18 @@ function current() {
   return pg ? +pg.dataset.n : 1;
 }
 // Pages above may change height once drawn, so the jump is repeated until the page stays in place.
+// Opens the report of a suggestion next to the fields, searches its words and goes to its page.
+function showFind(c) {
+  S.report = S.files[c.fi]; S.q = c.match.replace(/\s+/g, ' ').trim().slice(0, 60); S.qKey = null;
+  render();
+  const q = $('#q'); if (q) q.value = S.q;
+  let tries = 0; // wait until the text is read and the pages of the panel exist
+  const go = () => {
+    if (!S.report.pages || !document.querySelector(`#pages .pg[data-n="${c.page}"]`)) { if (++tries < 50) setTimeout(go, 200); return; }
+    hits(); goPage(c.page);
+  };
+  go();
+}
 function goPage(n) {
   const box = $('#pages'), d = box && box.querySelector(`.pg[data-n="${n}"]`);
   if (!d) return;
@@ -253,7 +267,30 @@ function modelRow(v, label) {
   return `<div class="row"><span class="l">${label}</span><span class="v${sub ? ' stack' : ''}"><span style="display:flex;width:100%"><span>${text}</span><button class="edit small dim" data-editk="${v.key}">${PEN}Edit</button></span>${sub ? `<span class="small dim">${esc(sub)}</span>` : ''}</span></div>`;
 }
 
+// Suggestions from the reports under a field: the values found by suggest.js, best first, with page.
+// A click fills the field and shows the place in the report. Nothing is filled in without a click.
+function suggestions(key) {
+  const all = [];
+  S.files.forEach((f, fi) => { if (f.sugg && f.sugg[key]) f.sugg[key].forEach((c) => all.push({ ...c, fi })); });
+  return all.sort((a, b) => b.score - a.score).filter((c, i, l) => l.findIndex((x) => x.value === c.value) === i).slice(0, 3);
+}
+const SUG = new Map();
+function sugLine(v, raw, html) {
+  const list = suggestions(v.key);
+  if (!list.length) return html;
+  const same = (c) => (typeof c.value === 'number' ? parse(raw) === c.value : raw === c.value);
+  const id = (c) => { const k = SUG.size; SUG.set(String(k), { key: v.key, c }); return k; };
+  const where = (c) => `p. ${c.page}${c.kind === 'table' ? ', highest in a table' : ''}`.replace('highest', v.key === 'time_in_category_2' ? 'lowest' : 'highest');
+  const val = (c) => esc(typeof c.value === 'number' ? fmt(c.value, Number.isInteger(c.value) ? 0 : String(c.value).split('.')[1].length) : c.value) + (typeof c.value === 'number' && v.unit ? ' ' + esc(v.unit) : '');
+  const hit = list.find(same);
+  const body = hit
+    ? `<span class="dim">In the report, ${where(hit)}</span><button data-sugshow="${id(hit)}">show</button>`
+    : `<span class="dim">From the report</span>` + list.map((c) => `<button data-sug="${id(c)}" title="Fill in and show in the report">${val(c)}<span class="dim">, ${where(c)}</span></button>`).join('');
+  return html + `<div class="sug small">${body}</div>`;
+}
+
 function pageData() {
+  SUG.clear();
   const m = S.model;
   const reports = S.files.filter((f) => f.kind === 'pdf' && f.url);
   const rep = block('Report', reports.length ? 'opens next to the fields' : 'none yet', reports.length
@@ -270,8 +307,8 @@ function pageData() {
     if (v.def.kind === 'model') return modelRow(v, esc(v.label));
     if (v.def.kind === 'calc') return useRow + modelRow(v, esc(v.label));
     const raw = S.state.inputs[v.key] || '';
-    if (v.def.kind === 'choice') return row(esc(v.label), `<select data-k="in:${v.key}" data-in="${v.key}" class="${raw ? '' : 'dim'}"><option value="">choose</option>${v.def.options.map((o) => `<option${o === raw ? ' selected' : ''}>${o}</option>`).join('')}</select>`, 'in');
-    return row(esc(v.label), `<input data-k="in:${v.key}" data-in="${v.key}" inputmode="decimal" value="${esc(raw)}"><span class="u dim">${esc(v.unit)}</span>`, 'in');
+    if (v.def.kind === 'choice') return sugLine(v, raw, row(esc(v.label), `<select data-k="in:${v.key}" data-in="${v.key}" class="${raw ? '' : 'dim'}"><option value="">choose</option>${v.def.options.map((o) => `<option${o === raw ? ' selected' : ''}>${o}</option>`).join('')}</select>`, 'in'));
+    return sugLine(v, raw, row(esc(v.label), `<input data-k="in:${v.key}" data-in="${v.key}" inputmode="decimal" value="${esc(raw)}"><span class="u dim">${esc(v.unit)}</span>`, 'in'));
   }).join(''));
   const opt = OPTIONAL.map((d) => by[d.key]), own = vals.filter((v) => v.level === 'own');
   const sub = `${opt.filter((v) => v.selected).length} of ${opt.length} selected, ${opt.filter((v) => v.source === 'manual').length} corrected, ${own.length} own`;
@@ -402,6 +439,11 @@ document.addEventListener('click', (e) => {
   else if (d.report) { const f = S.files[+d.report]; S.report = S.report === f ? null : f; render(); return; }
   else if (d.rmfile) { drop(S.files[+d.rmfile]); render(); return; }
   else if (d.page) { goPage(+d.page); return; }
+  else if (d.sug || d.sugshow) {
+    const it = SUG.get(d.sug || d.sugshow); if (!it) return;
+    if (d.sug) { st.inputs[it.key] = typeof it.c.value === 'number' ? String(it.c.value) : it.c.value; save(); }
+    showFind(it.c); return;
+  }
   else if (d.zoom) { const n = current(), i = ZOOM.indexOf(S.zoom) + +d.zoom; if (i >= 0 && i < ZOOM.length) { S.zoom = ZOOM[i]; view(n); } return; }
   else if (d.editk) S.editing = d.editk;
   else if (d.reset) { delete st.edits[d.reset]; delete st.inputs[d.reset]; S.editing = null; }
@@ -474,4 +516,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'cacdbe9';
+window.SERVICES_VERSION = '19576ca';
