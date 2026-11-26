@@ -1,8 +1,8 @@
 // Services, document: the three 16:9 pages (Overview, Systems, Performance) as HTML strings.
 // No DOM in here. The same markup is the print view of the app and services.html in the download.
-import { fmt } from './core.js?v=a2d2f1b';
-import { FIELDS, COLOR } from './pictos.js?v=a2d2f1b';
-import { display, isEmpty } from './data.js?v=a2d2f1b';
+import { fmt } from './core.js?v=9ceca69';
+import { FIELDS, COLOR } from './pictos.js?v=9ceca69';
+import { display, isEmpty } from './data.js?v=9ceca69';
 
 // Same rules as pdf-example.html, scoped under .doc so the app can use it next to its own styles.
 export const DOC_CSS = `
@@ -53,9 +53,9 @@ export function pages(ctx) {
   <div class="p1img im">${svgs.all}</div>
   <div class="p1vals">
     <div class="val"><span class="small dim">Service systems</span><span class="big">${isEmpty(kinds.value) ? '<span class="dim">n/a</span>' : esc(typeof kinds.value === 'number' ? kinds.value + ' kinds' : kinds.value)}</span></div>
-    <div class="val"><span class="small dim">Ducts and pipes per m² floor area</span><span class="big">${out(v.length_per_m2, 'm')}</span></div>
-    <div class="val"><span class="small dim">Volume of ducts and pipes per m² floor area</span><span class="big">${out(v.volume_per_m2, 'm³')}</span></div>
-    <div class="val"><span class="small dim">Floor area</span><span class="big">${out(v.floor_area, 'm²')}</span></div>
+    <div class="val"><span class="small dim">Ducts and pipes per m² heated floor area</span><span class="big">${out(v.length_per_m2, 'm')}</span></div>
+    <div class="val"><span class="small dim">Volume of ducts and pipes per m² heated floor area</span><span class="big">${out(v.volume_per_m2, 'm³')}</span></div>
+    <div class="val"><span class="small dim">Heated floor area</span><span class="big">${out(v.floor_area, 'm²')}</span></div>
   </div>
   ${side}
   <div class="foot small dim">From the MEP model ${esc(m.file)}.${isEmpty(v.floor_area.value) ? ' Per m² values need the floor area.' : ' Floor area entered by hand.'}</div>
