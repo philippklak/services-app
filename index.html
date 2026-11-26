@@ -33,17 +33,19 @@ header nav a.on { color: var(--ink); }
 .sec span { display: block; }
 .row { display: contents; }
 .row .l, .row .v { min-height: 46px; display: flex; align-items: center; margin-bottom: 4px; }
-.row .l { grid-column: 4 / span 5; gap: 14px; }
+.row .l { grid-column: 4 / span 5; gap: 14px; align-self: start; }
 .row .l, .row .v { height: 46px; white-space: nowrap; overflow: hidden; }
-.row .v { grid-column: 9 / span 4; padding: 0 14px; }
+.row .v { grid-column: 9 / span 4; padding: 0 14px; align-self: start; }
 .row .v > span:first-child > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .row .v.stack { flex-direction: column; align-items: flex-start; justify-content: center; padding-top: 10px; padding-bottom: 10px; height: auto; white-space: normal; }
 .row .v.stack > span:first-child { align-items: flex-start; }
-.storeys { display: grid; grid-template-columns: auto auto; gap: 2px 18px; padding: 4px 0; }
+.storeys { display: grid; grid-template-columns: auto auto; gap: 0 16px; font-size: 14px; line-height: 1.5; padding: 2px 0 4px; }
 .storeys b { font-weight: 400; text-align: right; }
 .row.in .v { background: var(--surface); }
-.sug { grid-column: 9 / span 4; display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; align-items: baseline; justify-items: start; padding: 2px 14px 10px; margin-top: -2px; }
+.row .l.withsug { grid-row: span 2; }
 .sug > :first-child { grid-row: 1 / span 3; }
+.row .l { height: auto !important; white-space: normal !important; padding: 12px 0; line-height: 1.25; min-height: 46px; }
+.sug { grid-column: 9 / span 4; align-self: start; display: grid; grid-template-columns: auto 1fr; justify-items: start; align-items: baseline; gap: 2px 14px; padding: 0 14px 12px; margin: -4px 0 4px; background: var(--surface); }
 .sug button { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .sug button .dim { text-decoration: none; }
 .row.off .l, .row.off .v { color: var(--dim); }
@@ -109,7 +111,7 @@ body.split .row .l { height: auto; min-height: 46px; white-space: normal; paddin
 body.split .row .l, body.split .note, body.split .head h1 { grid-column: 4 / span 4; }
 body.split .row .v, body.split .sug, body.split .head p, body.split .btn { grid-column: 8 / span 5; }
 body.split .row .v { height: auto; min-height: 46px; white-space: normal; }
-@media (max-width: 760px) { header nav { gap: 0 18px; flex-wrap: wrap; } #panel { width: 100vw; left: 0; } body.split .page { margin: 0 auto; } .grid > *, .row .l, .row .v, .sug, .seg, .btn, .note { grid-column: 1 / -1 !important; } .sec { grid-row: auto; padding-bottom: 8px; } .head h1 { font-size: 44px; } }
+@media (max-width: 760px) { header nav { gap: 0 18px; flex-wrap: wrap; } .row .l.withsug { grid-row: auto; } #panel { width: 100vw; left: 0; } body.split .page { margin: 0 auto; } .grid > *, .row .l, .row .v, .sug, .seg, .btn, .note { grid-column: 1 / -1 !important; } .sec { grid-row: auto; padding-bottom: 8px; } .head h1 { font-size: 44px; } }
 @media print {
   #panel { display: none !important; }
   @page { size: 1280px 720px; margin: 0; }
@@ -137,6 +139,6 @@ body.split .row .v { height: auto; min-height: 46px; white-space: normal; }
 <div id="panel" hidden></div>
 <div id="print" class="doc"></div>
 <input id="file" type="file" accept=".ifc,.pdf" multiple hidden>
-<script type="module" src="./app.js?v=0332482"></script>
+<script type="module" src="./app.js?v=e69ceb1"></script>
 </body>
 </html>
