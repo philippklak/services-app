@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=17b7bc1';
-import { REQUIRED, OPTIONAL, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty } from './data.js?v=17b7bc1';
-import { FIELDS, pictograms } from './pictos.js?v=17b7bc1';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=17b7bc1';
+import { analyze, fmt } from './core.js?v=cacdbe9';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty } from './data.js?v=cacdbe9';
+import { FIELDS, pictograms } from './pictos.js?v=cacdbe9';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=cacdbe9';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -41,7 +41,7 @@ function save() { if (!S.model || VIDEO) return; try { localStorage.setItem(stor
 // the model and the report, the report values are filled in as in the example PDF. Nothing is saved.
 const VIDEO = new URLSearchParams(location.search).has('video');
 const PRE = new Map();
-const VIDEO_INPUTS = { energy_limit: '41.2', energy_be18: '40.9', daylight_sda300: 'met', hours_above_27: '0.1', co2_max: '1219', floor_area: '6134' };
+const VIDEO_INPUTS = { building_use: 'other buildings', energy_be18: '40.9', daylight_sda300: 'met', hours_above_27: '0.1', co2_max: '1219', floor_area: '6134' };
 const isMEP = (m) => m.elements.filter((e) => e.seg).length >= 10;
 async function addFile(name, size, getBuffer) {
   const f = { name, size, kind: /\.ifc$/i.test(name) ? 'ifc' : /\.pdf$/i.test(name) ? 'pdf' : 'other', status: 'reading' };
@@ -78,8 +78,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=17b7bc1');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=17b7bc1', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=cacdbe9');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=cacdbe9', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -93,7 +93,7 @@ async function readText(f, data) {
   if (S.report === f) hits();
 }
 // Search terms used when a field gets the focus. Spaces in a term also match no space ("27 °C", "27°C").
-const CONTEXT = { energy_limit: 'BR18', energy_be18: 'BE18', energy_ida: 'IDA', daylight_sda300: 'sDA', heating_load: 'heating load', hours_above_27: '27 °C', time_in_category_2: 'category II', co2_max: 'ppm', floor_area: 'floor area' };
+const CONTEXT = { building_use: 'BR18', energy_limit: 'BR18', energy_be18: 'BE18', energy_ida: 'IDA', daylight_sda300: 'sDA', heating_load: 'heating load', hours_above_27: '27 °C', time_in_category_2: 'category II', co2_max: 'ppm', floor_area: 'floor area' };
 const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // pdf.js often splits words and numbers into pieces ("41 , 2", "en ergy"), so spaces are allowed between all characters.
 const searchRe = () => { const q = S.q.replace(/\s+/g, ''); return q ? new RegExp([...q].map(reEsc).join('\\s*'), 'gi') : null; };
@@ -245,10 +245,10 @@ function modelRow(v, label) {
   if (S.editing === v.key || v.source === 'manual') {
     const cur = v.source === 'manual' ? display(v) : display({ ...v, value: v.model });
     const was = isEmpty(v.model) ? 'n/a' : display({ ...v, value: v.model });
-    return row(label, `<input data-k="edit:${v.key}" data-edit="${v.key}" value="${esc(cur)}"><span class="edit small dim">model ${esc(was)},&nbsp;<button data-reset="${v.key}">reset</button></span>`, 'in');
+    return row(label, `<input data-k="edit:${v.key}" data-edit="${v.key}" value="${esc(cur)}"><span class="edit small dim">${v.def.kind === 'calc' ? 'calculated' : 'model'} ${esc(was)},&nbsp;<button data-reset="${v.key}">reset</button></span>`, 'in');
   }
-  if (isEmpty(v.value)) return row(label, v.def.needs ? 'needs the floor area' : 'n/a', 'off');
-  const sub = ''; // one line per row, details go into the note column of the export
+  if (isEmpty(v.value)) return row(label, v.def.needsText || (v.def.needs ? 'needs the floor area' : 'n/a'), 'off');
+  const sub = v.formula || ''; // the formula of a calculated value, other details go into the note column of the export
   const text = esc(display(v)) + (typeof v.value === 'number' ? unit : '');
   return `<div class="row"><span class="l">${label}</span><span class="v${sub ? ' stack' : ''}"><span style="display:flex;width:100%"><span>${text}</span><button class="edit small dim" data-editk="${v.key}">${PEN}Edit</button></span>${sub ? `<span class="small dim">${esc(sub)}</span>` : ''}</span></div>`;
 }
@@ -264,8 +264,11 @@ function pageData() {
   let h = head('Data', `Project ${esc(m.id)}. Grey fields are yours to fill from the report. Everything else was read from the model and can be corrected.`);
   h += rep;
   const req = REQUIRED.map((d) => by[d.key]);
+  const use = S.state.inputs.building_use || '';
+  const useRow = row('Building use, for the BR18 limit', `<select data-k="in:building_use" data-in="building_use" class="${use ? '' : 'dim'}"><option value="">choose</option>${BUILDING_USE.map((o) => `<option${o === use ? ' selected' : ''}>${o}</option>`).join('')}</select>`, 'in');
   h += block('Required', `${req.filter((v) => !isEmpty(v.value)).length} of ${req.length} complete`, req.map((v) => {
     if (v.def.kind === 'model') return modelRow(v, esc(v.label));
+    if (v.def.kind === 'calc') return useRow + modelRow(v, esc(v.label));
     const raw = S.state.inputs[v.key] || '';
     if (v.def.kind === 'choice') return row(esc(v.label), `<select data-k="in:${v.key}" data-in="${v.key}" class="${raw ? '' : 'dim'}"><option value="">choose</option>${v.def.options.map((o) => `<option${o === raw ? ' selected' : ''}>${o}</option>`).join('')}</select>`, 'in');
     return row(esc(v.label), `<input data-k="in:${v.key}" data-in="${v.key}" inputmode="decimal" value="${esc(raw)}"><span class="u dim">${esc(v.unit)}</span>`, 'in');
@@ -401,35 +404,35 @@ document.addEventListener('click', (e) => {
   else if (d.page) { goPage(+d.page); return; }
   else if (d.zoom) { const n = current(), i = ZOOM.indexOf(S.zoom) + +d.zoom; if (i >= 0 && i < ZOOM.length) { S.zoom = ZOOM[i]; view(n); } return; }
   else if (d.editk) S.editing = d.editk;
-  else if (d.reset) { delete st.edits[d.reset]; S.editing = null; }
+  else if (d.reset) { delete st.edits[d.reset]; delete st.inputs[d.reset]; S.editing = null; }
   else if (d.opt) st.optional[d.opt] = st.optional[d.opt] === false;
   else if (d.rmown) st.own.splice(+d.rmown, 1);
   else if (d.img) st.images[d.img] = d.val;
   else if (d.out) { if (d.out === 'all') { const on = !Object.values(S.out).every(Boolean); for (const k in S.out) S.out[k] = on; } else S.out[d.out] = !S.out[d.out]; }
   else return;
   save(); render();
-  if (d.editk) { const el = document.querySelector(`[data-edit="${d.editk}"]`); if (el) { el.focus(); el.select(); } }
+  if (d.editk) { const el = document.querySelector(`[data-edit="${d.editk}"]`); if (el) { el.focus(); el.select(); } context(d.editk); }
 });
 document.addEventListener('change', (e) => {
   const t = e.target, d = t.dataset, st = S.state;
   if (t.id === 'file') { addFiles([...t.files]); t.value = ''; return; }
   if (d.in) st.inputs[d.in] = t.value;
-  else if (d.edit) { if (t.value.trim()) st.edits[d.edit] = t.value; else delete st.edits[d.edit]; S.editing = null; }
+  else if (d.edit) { delete st.inputs[d.edit]; if (t.value.trim()) st.edits[d.edit] = t.value; else delete st.edits[d.edit]; S.editing = null; }
   else if (d.own) st.own[+d.own][d.f] = t.value;
   else return;
   save(); soon();
 });
 document.addEventListener('input', (e) => { if (e.target.dataset.search !== undefined) { S.q = e.target.value; S.qKey = null; hits(); } });
 // Context search: a field of the report gets the focus, the panel searches for its term.
-document.addEventListener('focusin', (e) => {
-  const k = e.target.dataset && e.target.dataset.in;
+function context(k) {
   if (!k || !S.report || !CONTEXT[k] || S.qKey === k) return;
   S.q = CONTEXT[k]; S.qKey = k;
   const q = $('#q'); if (q) q.value = S.q;
   hits();
   const first = document.querySelector('#hits [data-page]'); // and shows the first hit right away
   if (first) goPage(+first.dataset.page);
-});
+}
+document.addEventListener('focusin', (e) => context(e.target.dataset && (e.target.dataset.in || e.target.dataset.edit)));
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
 let depth = 0;
 const dropOn = (on) => { const el = document.querySelector('.drop'); if (el) el.classList.toggle('on', on); };
@@ -471,4 +474,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = '17b7bc1';
+window.SERVICES_VERSION = 'cacdbe9';

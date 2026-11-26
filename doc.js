@@ -1,8 +1,8 @@
 // Services, document: the three 16:9 pages (Overview, Systems, Performance) as HTML strings.
 // No DOM in here. The same markup is the print view of the app and services.html in the download.
-import { fmt } from './core.js?v=17b7bc1';
-import { FIELDS, COLOR } from './pictos.js?v=17b7bc1';
-import { display, isEmpty } from './data.js?v=17b7bc1';
+import { fmt } from './core.js?v=cacdbe9';
+import { FIELDS, COLOR } from './pictos.js?v=cacdbe9';
+import { display, isEmpty } from './data.js?v=cacdbe9';
 
 // Same rules as pdf-example.html, scoped under .doc so the app can use it next to its own styles.
 export const DOC_CSS = `
@@ -80,6 +80,8 @@ export function pages(ctx) {
   const goal = (x) => (x === '' ? '<span class="a big dim"></span>' : `<span class="a big">${x}</span>`);
   const res = (x) => `<span class="b big${isEmpty(x.value) ? ' dim' : ''}">${isEmpty(x.value) ? 'n/a' : esc(display(x))}</span>`;
   const limit = isEmpty(v.energy_limit.value) ? '' : esc(display(v.energy_limit));
+  const el = v.energy_limit;
+  const goalNote = isEmpty(el.value) ? '' : el.source === 'calculated' ? ` Primary energy goal ${esc(el.formula)}.` : ' Primary energy goal as entered by the team.';
   const row = (unit, label, g, r) => `<span class="l"><span class="small dim">${unit}</span>${label}</span>${goal(g)}${res(r)}`;
   const p3 = `<div class="sheet">
   <div class="side"><h1>Performance</h1></div>
@@ -94,7 +96,7 @@ export function pages(ctx) {
     ${row('ppm, worst room', 'CO₂ max', '1,200', v.co2_max)}
   </div>
   ${side}
-  <div class="foot small dim">From the team report, entered by hand and not calculated by us.</div>
+  <div class="foot small dim">Results from the team report, entered by hand and not calculated by us.${goalNote}</div>
   <div class="pg small dim">3 of 3</div>
 </div>`;
   return [p1, p2, p3];

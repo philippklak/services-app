@@ -1,14 +1,15 @@
 // Services, data: the values of one project and their export as CSV and JSON. No DOM in here.
 // Every value has key, label, value, unit, level (required, optional, own), source (model, report, manual)
 // and model_value when a model value was corrected. Empty values are exported as n/a, never estimated.
-import { fmt } from './core.js?v=17b7bc1';
-import { FIELDS } from './pictos.js?v=17b7bc1';
+import { fmt } from './core.js?v=cacdbe9';
+import { FIELDS } from './pictos.js?v=cacdbe9';
 
 export const LABEL = Object.fromEntries(FIELDS.map((f) => [f.id, f.label]));
 
-// kind: input (typed in), choice (one of options), model (read from the model, can be corrected)
+// kind: input (typed in), choice (one of options), model (read from the model, can be corrected),
+// calc (calculated from other inputs, can be corrected)
 export const REQUIRED = [
-  { key: 'energy_limit', label: 'Primary energy, BR18 limit', unit: 'kWh/m² a', kind: 'input' },
+  { key: 'energy_limit', label: 'Primary energy, BR18 limit', unit: 'kWh/m² a', kind: 'calc', dec: 1, needs: 'floor_area', needsText: 'needs building use and floor area' },
   { key: 'energy_be18', label: 'Result by regulation, BE18', unit: 'kWh/m² a', kind: 'input' },
   { key: 'energy_ida', label: 'Simulated, IDA ICE', unit: 'kWh/m² a', kind: 'input' },
   { key: 'daylight_sda300', label: 'Daylight sDA300 above 50 %', unit: '', kind: 'choice', options: ['met', 'not met'] },
@@ -16,7 +17,7 @@ export const REQUIRED = [
   { key: 'hours_above_27', label: 'Indoor climate, hours above 27 °C, worst room', unit: 'h', kind: 'input' },
   { key: 'time_in_category_2', label: 'Indoor climate, time in comfort category II, worst room', unit: '%', kind: 'input' },
   { key: 'co2_max', label: 'CO₂ max, worst room', unit: 'ppm', kind: 'input' },
-  { key: 'floor_area', label: 'Floor area', unit: 'm²', kind: 'input' },
+  { key: 'floor_area', label: 'Heated floor area', unit: 'm²', kind: 'input' },
   { key: 'system_kinds', label: 'Service systems', unit: 'kinds', kind: 'model' },
   { key: 'length_per_m2', label: 'Ducts and pipes per m²', unit: 'm/m²', kind: 'model', dec: 3, needs: 'floor_area' },
   { key: 'volume_per_m2', label: 'Volume of ducts and pipes per m²', unit: 'm³/m²', kind: 'model', dec: 4, needs: 'floor_area' },
@@ -28,6 +29,21 @@ export const OPTIONAL = [
   { key: 'length_per_system', label: 'Length of ducts and pipes, all systems', unit: 'm', kind: 'model' },
 ];
 export const RISER_NOTE = 'Approximation: vertical segments from 2.5 m, counted on every storey level they cross, the same position rounded to 1 m counts once.';
+
+// Building use decides the BR18 energy frame. It is an input of the project, not a value of its own.
+export const BUILDING_USE = ['other buildings', 'residential'];
+// BR18 § 259 (housing, dormitories, hotels) and § 260 (other buildings): kWh/m² a plus 1000 kWh a divided
+// by the heated floor area. Additions for high lighting, extra ventilation, long use or large room heights
+// (§ 260 stk. 3) come from the energy calculation of the team and are entered with Edit.
+export function energyLimit(use, area) {
+  if (!area || !BUILDING_USE.includes(use)) return { value: null };
+  const res = use === 'residential', base = res ? 30 : 41;
+  return {
+    value: round(base + 1000 / area, 1),
+    formula: `${base}.0 + 1000/A, BR18 § ${res ? 259 : 260}`,
+    note: `BR18 § ${res ? 259 : 260}, ${use}: ${base}.0 + 1000/A with A = heated floor area ${fmt(area)} m²` + (res ? '.' : '. Additions after § 260 stk. 3 not included.'),
+  };
+}
 
 export const emptyState = () => ({ inputs: {}, edits: {}, optional: {}, own: [], images: { colour: 'colour', storeys: 'shown', detail: 'all' } });
 
@@ -85,13 +101,15 @@ export function buildValues(m, state) {
   const area = typeof floor === 'number' && floor > 0 ? floor : null;
   const make = (d, level) => {
     const v = { key: d.key, label: d.label, value: null, unit: d.unit, level, source: 'manual', model_value: null, note: '', def: d };
-    if (d.kind === 'model') {
-      const mv = fromModel(m, d.key, area);
+    if (d.kind === 'model' || d.kind === 'calc') {
+      const mv = d.kind === 'calc' ? energyLimit(st.inputs.building_use, area) : fromModel(m, d.key, area);
       v.note = mv.note || '';
       v.model = mv.value;
-      const ed = st.edits[d.key];
+      v.formula = mv.formula || '';
+      // a BR18 limit typed in before it was calculated counts as a correction
+      const ed = st.edits[d.key] !== undefined ? st.edits[d.key] : d.kind === 'calc' ? st.inputs[d.key] : undefined;
       if (ed !== undefined && ed !== null && String(ed).trim() !== '') { v.value = parse(ed); v.source = 'manual'; v.model_value = mv.value; }
-      else { v.value = mv.value; v.source = 'model'; }
+      else { v.value = mv.value; v.source = d.kind === 'calc' ? 'calculated' : 'model'; }
     } else v.value = parse(st.inputs[d.key]);
     if (level === 'optional') v.selected = st.optional[d.key] !== false;
     return v;
