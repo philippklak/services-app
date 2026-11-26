@@ -47,6 +47,10 @@ header nav a.on { color: var(--ink); }
 .sug { grid-column: 9 / span 4; align-self: start; display: flex; flex-wrap: nowrap; align-items: baseline; gap: 14px; padding: 0 14px; margin: -2px 0 8px; white-space: nowrap; overflow: hidden; }
 .sug button { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .sug button .dim { text-decoration: none; }
+.sug .pick { display: inline-flex; align-items: baseline; gap: 6px; }
+.sug .pick > button:first-child { text-decoration: none; font-weight: 500; }
+.sug .pick .x { text-decoration: none; color: var(--dim); align-self: center; display: inline-flex; }
+.sug .pick .x:hover { color: var(--ink); }
 .row.off .l, .row.off .v { color: var(--dim); }
 .v input, .v select { flex: 1; align-self: stretch; }
 .v select { cursor: pointer; }
@@ -138,6 +142,6 @@ body.split .row .v { height: auto; min-height: 46px; white-space: normal; }
 <div id="panel" hidden></div>
 <div id="print" class="doc"></div>
 <input id="file" type="file" accept=".ifc,.pdf" multiple hidden>
-<script type="module" src="./app.js?v=dea7d92"></script>
+<script type="module" src="./app.js?v=cdf17c3"></script>
 </body>
 </html>
