@@ -68,10 +68,9 @@ Tested on four reports of the course: 21 values found right, 11 correctly left e
 
 ## Run it on your own computer
 
-The app is a static web page. Browsers only load its modules from a web server, so open it through a small local server:
+The app is a static web page. Browsers only load its modules from a web server, so open it through a small local server. Go into the folder of the app (`services-app` when you clone this repository, `app` in the hand-in package) and start it:
 
 ```bash
-cd services-app
 python3 -m http.server 8766
 ```
 
