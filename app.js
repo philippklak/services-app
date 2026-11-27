@@ -1,15 +1,15 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=ab77cdf';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=ab77cdf';
-import { FIELDS, pictograms } from './pictos.js?v=ab77cdf';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=ab77cdf';
+import { analyze, fmt } from './core.js?v=017a2d8';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=017a2d8';
+import { FIELDS, pictograms } from './pictos.js?v=017a2d8';
+import { DOC_CSS, pages } from './doc.js?v=017a2d8';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
 const PAGES = ['files', 'data', 'images', 'export'];
-const S = { files: [], report: null, q: '', qKey: null, zoom: 1, model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, html: true }, pics: null, picsKey: '' };
+const S = { files: [], report: null, q: '', qKey: null, zoom: 1, model: null, state: emptyState(), editing: null, out: { csv: true, json: true, images: true, pdf: true }, pics: null, picsKey: '' };
 let api = null;
 document.getElementById('doc-css').textContent = DOC_CSS;
 
@@ -84,8 +84,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=ab77cdf');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=ab77cdf', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=017a2d8');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=017a2d8', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -95,7 +95,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=ab77cdf'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=017a2d8'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -384,13 +384,13 @@ function pageExport() {
   const empty = vals.filter((v) => v.level === 'required' && isEmpty(v.value)).length;
   const sel = S.out, n = Object.values(sel).filter(Boolean).length;
   let h = head('Export', 'One download with the data, the images and a document with three pages.');
-  h += block('Document', 'services.html, 3 pages', `<div class="fill thumbs">${pages(docCtx()).map((p) => `<div class="thumb doc">${p}</div>`).join('')}</div>`);
+  h += block('Document', `services-${esc(m.id)}.pdf, 3 pages`, `<div class="fill thumbs">${pages(docCtx()).map((p) => `<div class="thumb doc">${p}</div>`).join('')}</div>`);
   const item = (k, name, what) => `<div class="row"><button class="l" data-out="${k}">${chk(k === 'all' ? n === 4 : sel[k])}${name}</button><span class="v">${what}</span></div>`;
   h += block('Files', `${n} of 4 selected`,
     item('all', 'All files', `services-${esc(m.id)}.zip`) + item('csv', 'data.csv', `${rows.length} values with unit and source`) + item('json', 'data.json', 'the same values for scripts') +
-    item('images', 'images/', `${FIELDS.length} images as SVG and PNG`) + item('html', 'services.html', '3 pages, opens in any browser'));
+    item('images', 'images/', `${FIELDS.length} images as SVG and PNG`) + item('pdf', `services-${esc(m.id)}.pdf`, '3 pages, landscape 16:9'));
   h += `<div class="grid"><p class="note">${empty ? `${empty} required ${empty === 1 ? 'value is' : 'values are'} still empty. ${empty === 1 ? 'It is' : 'They are'} exported as n/a.` : 'All required values are filled in.'}</p><button class="btn" data-act="download"${n ? '' : ' disabled'}>Download</button></div>`;
-  h += `<div class="grid"><p class="note">The document as PDF: choose Save as PDF in the print dialog. Use Chrome, Safari or Firefox, the pages are landscape 16:9.</p><button class="btn light" data-act="print">Print PDF</button></div>`;
+  h += `<div class="grid"><p class="note">Only the document, as PDF without the ZIP. It is made in the browser, nothing is uploaded.</p><button class="btn light" data-act="pdf">Download PDF</button></div>`;
   return h;
 }
 
@@ -453,20 +453,45 @@ async function download() {
       files[`images/${name}.png`] = await png(x.svg, p.viewBox);
     }
   }
-  if (S.out.html) files['services.html'] = strToU8(documentHTML(docCtx()));
+  if (S.out.pdf) files[`services-${m.id}.pdf`] = new Uint8Array(await makePDF());
+  save_(new Blob([zipSync(files)], { type: 'application/zip' }), `services-${m.id}.zip`);
+}
+function save_(blob, name) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([zipSync(files)], { type: 'application/zip' }));
-  a.download = `services-${m.id}.zip`;
+  a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
-function print() {
-  $('#print').innerHTML = pages(docCtx()).join('');
-  // the browser names the PDF after the page title: services-26-06.pdf
-  const was = document.title;
-  document.title = `services-${S.model ? S.model.id : 'project'}`;
-  window.addEventListener('afterprint', () => { document.title = was; }, { once: true });
-  window.print();
+// The PDF is made in the browser: html2canvas draws each page at twice the size, jsPDF puts them on 16:9 pages.
+// Both are loaded only when needed. The pages are images in the PDF, the text cannot be selected.
+const script = (src) => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('could not load ' + src)); document.head.appendChild(s); });
+let pdfLibs = null;
+async function makePDF() {
+  pdfLibs = pdfLibs || Promise.all([script('./vendor/html2canvas.min.js'), script('./vendor/jspdf.umd.min.js')]);
+  await pdfLibs;
+  const box = document.createElement('div');
+  box.className = 'doc'; box.style.cssText = 'position:fixed;left:-20000px;top:0;width:1280px';
+  box.innerHTML = pages(docCtx()).join('');
+  document.body.appendChild(box);
+  try {
+    if (document.fonts) await document.fonts.ready;
+    const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'px', format: [1280, 720], hotfixes: ['px_scaling'], compress: true });
+    const sheets = [...box.querySelectorAll('.sheet')];
+    for (let i = 0; i < sheets.length; i++) {
+      sheets[i].style.margin = '0';
+      const c = await window.html2canvas(sheets[i], { scale: 2, backgroundColor: '#ffffff', logging: false, width: 1280, height: 720 });
+      if (i) pdf.addPage([1280, 720], 'landscape');
+      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 1280, 720);
+    }
+    pdf.setProperties({ title: `services-${S.model.id}` });
+    return pdf.output('arraybuffer');
+  } finally { box.remove(); }
+}
+async function downloadPDF() { save_(new Blob([await makePDF()], { type: 'application/pdf' }), `services-${S.model.id}.pdf`); }
+// buttons that take a moment show it and stay disabled meanwhile
+async function busy(t, text, fn) {
+  const was = t.textContent; t.disabled = true; t.textContent = text;
+  try { await fn(); } catch (e) { console.error(e); alert('The export failed: ' + (e && e.message || e)); } finally { t.disabled = false; t.textContent = was; }
 }
 
 // ---- events
@@ -477,8 +502,8 @@ document.addEventListener('click', (e) => {
   if (d.act === 'choose') { if (VIDEO) videoDrop(); else $('#file').click(); } // the recording mode never opens the file dialog
   else if (d.act === 'addown') st.own.push({ label: '', value: '', unit: '' });
   else if (d.act === 'reset') { if (!confirm('Reset all inputs and corrections of this project?')) return; S.state = emptyState(); S.pics = null; }
-  else if (d.act === 'download') { download(); return; }
-  else if (d.act === 'print') { print(); return; }
+  else if (d.act === 'download') { busy(t, 'Making the files', download); return; }
+  else if (d.act === 'pdf') { busy(t, 'Making the PDF', downloadPDF); return; }
   else if (d.act === 'closereport') { S.report = null; render(); return; }
   else if (d.report) { const f = S.files[+d.report]; S.report = S.report === f ? null : f; if (VIDEO) S.zoom = 'fit'; render(); return; }
   else if (d.rmfile) { drop(S.files[+d.rmfile]); render(); return; }
@@ -572,4 +597,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'ab77cdf';
+window.SERVICES_VERSION = '017a2d8';
