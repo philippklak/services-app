@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=c6892a8';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=c6892a8';
-import { FIELDS, pictograms } from './pictos.js?v=c6892a8';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=c6892a8';
+import { analyze, fmt } from './core.js?v=6b9adf6';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=6b9adf6';
+import { FIELDS, pictograms } from './pictos.js?v=6b9adf6';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=6b9adf6';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -82,8 +82,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=c6892a8');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=c6892a8', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=6b9adf6');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=6b9adf6', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -93,7 +93,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=c6892a8'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=6b9adf6'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -206,13 +206,21 @@ function showFind(c) {
 function goPage(n) {
   const box = $('#pages'), d = box && box.querySelector(`.pg[data-n="${n}"]`);
   if (!d) return;
-  let tries = 0;
+  let tries = 0, stop = false;
+  // the user scrolls himself: the jump lets go at once
+  const quit = () => { stop = true; ['wheel', 'pointerdown', 'touchstart', 'keydown'].forEach((t) => box.removeEventListener(t, quit)); };
+  ['wheel', 'pointerdown', 'touchstart', 'keydown'].forEach((t) => box.addEventListener(t, quit, { passive: true }));
   // to the first mark of the page once it is drawn, otherwise to the top of the page
   const go = () => {
+    if (stop) return;
     const h = d.querySelector('.hl'), b = box.getBoundingClientRect();
-    if (h) { const r = h.getBoundingClientRect(); box.scrollTop += r.top - b.top - b.height / 3; box.scrollLeft += r.left - b.left - b.width / 3; }
-    else box.scrollTop += d.getBoundingClientRect().top - b.top;
-    if (++tries < 20) setTimeout(go, 150); // about 3 s, the mark appears once the page is drawn
+    let dy, dx = 0;
+    if (h) { const r = h.getBoundingClientRect(); dy = r.top - b.top - b.height / 3; dx = r.left - b.left - b.width / 3; }
+    else dy = d.getBoundingClientRect().top - b.top;
+    box.scrollTop += dy; box.scrollLeft += dx;
+    // done once the mark stands still, otherwise again for about 3 s while the pages are drawn
+    if (h && tries >= 4 && Math.abs(dy) < 2 && Math.abs(dx) < 2) return quit();
+    if (++tries < 20) setTimeout(go, 150); else quit();
   };
   go();
 }
@@ -562,4 +570,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = 'c6892a8';
+window.SERVICES_VERSION = '6b9adf6';
