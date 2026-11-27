@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=02a6d9f';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=02a6d9f';
-import { FIELDS, pictograms } from './pictos.js?v=02a6d9f';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=02a6d9f';
+import { analyze, fmt } from './core.js?v=c6892a8';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=c6892a8';
+import { FIELDS, pictograms } from './pictos.js?v=c6892a8';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=c6892a8';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -82,8 +82,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=02a6d9f');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=02a6d9f', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=c6892a8');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=c6892a8', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -93,7 +93,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=02a6d9f'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=c6892a8'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -132,10 +132,12 @@ async function view(keep) {
   const doc = f.doc, first = (await doc.getPage(1)).getViewport({ scale: 1 });
   if (observer) observer.disconnect();
   box.innerHTML = '';
+  // 'fit' shows a whole page in the panel, for the recording: first the cover, then the jump to the value
+  const fit = S.zoom === 'fit' ? Math.floor(Math.min(box.clientWidth - 28, (box.clientHeight - 14) * first.width / first.height)) : 0;
   for (let i = 1; i <= doc.numPages; i++) {
     const d = document.createElement('div');
     d.className = 'pg'; d.dataset.n = i;
-    d.style.width = `${S.zoom * 100}%`; d.style.aspectRatio = `${first.width} / ${first.height}`;
+    d.style.width = fit ? `${fit}px` : `${S.zoom * 100}%`; d.style.aspectRatio = `${first.width} / ${first.height}`;
     box.appendChild(d);
   }
   observer = new IntersectionObserver((list) => list.forEach((x) => { if (x.isIntersecting && !x.target.dataset.done) { x.target.dataset.done = 1; draw(doc, x.target); } }), { root: box, rootMargin: '800px 0px' });
@@ -189,6 +191,8 @@ function current() {
 // Pages above may change height once drawn, so the jump is repeated until the page stays in place.
 // Opens the report of a suggestion next to the fields, searches its words and goes to its page.
 function showFind(c) {
+  const zoomIn = VIDEO && S.zoom === 'fit'; // the recording goes from the whole page to the value, larger
+  if (zoomIn) S.zoom = 1.5;
   S.report = S.files[c.fi]; S.q = c.match.replace(/\s+/g, ' ').trim().slice(0, 60); S.qKey = null;
   render();
   const q = $('#q'); if (q) q.value = S.q;
@@ -197,7 +201,7 @@ function showFind(c) {
     if (!S.report.pages || !document.querySelector(`#pages .pg[data-n="${c.page}"]`)) { if (++tries < 50) setTimeout(go, 200); return; }
     hits(); goPage(c.page);
   };
-  go();
+  if (zoomIn && $('#pages')) view().then(go); else go();
 }
 function goPage(n) {
   const box = $('#pages'), d = box && box.querySelector(`.pg[data-n="${n}"]`);
@@ -208,7 +212,7 @@ function goPage(n) {
     const h = d.querySelector('.hl'), b = box.getBoundingClientRect();
     if (h) { const r = h.getBoundingClientRect(); box.scrollTop += r.top - b.top - b.height / 3; box.scrollLeft += r.left - b.left - b.width / 3; }
     else box.scrollTop += d.getBoundingClientRect().top - b.top;
-    if (++tries < 8) setTimeout(go, 150);
+    if (++tries < 20) setTimeout(go, 150); // about 3 s, the mark appears once the page is drawn
   };
   go();
 }
@@ -466,7 +470,7 @@ document.addEventListener('click', (e) => {
   else if (d.act === 'download') { download(); return; }
   else if (d.act === 'print') { print(); return; }
   else if (d.act === 'closereport') { S.report = null; render(); return; }
-  else if (d.report) { const f = S.files[+d.report]; S.report = S.report === f ? null : f; render(); return; }
+  else if (d.report) { const f = S.files[+d.report]; S.report = S.report === f ? null : f; if (VIDEO) S.zoom = 'fit'; render(); return; }
   else if (d.rmfile) { drop(S.files[+d.rmfile]); render(); return; }
   else if (d.page) { goPage(+d.page); return; }
   else if (d.sug || d.sugshow) {
@@ -476,7 +480,7 @@ document.addEventListener('click', (e) => {
   }
   else if (d.focus) { const el = document.querySelector(`[data-in="${d.focus}"]`); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); if (el.tagName === 'SELECT' && el.showPicker) try { el.showPicker(); } catch (x) {} } return; }
   else if (d.sugclear) delete st.inputs[d.sugclear];
-  else if (d.zoom) { const n = current(), i = ZOOM.indexOf(S.zoom) + +d.zoom; if (i >= 0 && i < ZOOM.length) { S.zoom = ZOOM[i]; view(n); } return; }
+  else if (d.zoom) { const n = current(), i = Math.max(0, ZOOM.indexOf(S.zoom)) + +d.zoom; if (i >= 0 && i < ZOOM.length) { S.zoom = ZOOM[i]; view(n); } return; }
   else if (d.editk) S.editing = d.editk;
   else if (d.reset) { delete st.edits[d.reset]; delete st.inputs[d.reset]; S.editing = null; }
   else if (d.opt) st.optional[d.opt] = st.optional[d.opt] === false;
@@ -529,7 +533,7 @@ if (new URLSearchParams(location.search).has('demo')) {
     .catch(() => { S.files.push({ name, kind: 'other', status: 'error' }); render(); });
 }
 if (VIDEO) {
-  S.zoom = 3; document.body.classList.add('video'); // the report larger, so the marks can be seen in the recording
+  S.zoom = 'fit'; document.body.classList.add('video'); // the report opens with the whole cover, a value then zooms in to its mark
   CONTEXT.energy_limit = '41,2'; // in the video the search finds the value itself in the report
   const ifc = '26-06-MEP.ifc', pdf = '26-06-D-MEP-Anon.pdf', bufs = {};
   // locally the models lie next to the app. On the live app they come from video-server.py on this Mac.
@@ -558,4 +562,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = '02a6d9f';
+window.SERVICES_VERSION = 'c6892a8';
