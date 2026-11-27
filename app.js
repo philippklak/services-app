@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=6b9adf6';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=6b9adf6';
-import { FIELDS, pictograms } from './pictos.js?v=6b9adf6';
-import { DOC_CSS, pages, documentHTML } from './doc.js?v=6b9adf6';
+import { analyze, fmt } from './core.js?v=ab77cdf';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=ab77cdf';
+import { FIELDS, pictograms } from './pictos.js?v=ab77cdf';
+import { DOC_CSS, pages, documentHTML } from './doc.js?v=ab77cdf';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -45,7 +45,9 @@ const VIDEO = (() => {
   try { if (on) sessionStorage.setItem('services-video', '1'); return on || sessionStorage.getItem('services-video') === '1'; } catch (e) { return on; }
 })();
 const PRE = new Map();
-const VIDEO_INPUTS = { building_use: 'other buildings', energy_be18: '40.9', daylight_sda300: 'met', hours_above_27: '0.1', co2_max: '1219', floor_area: '4645' }; // heated area, MAT report 26-06 p. 23 (GFA is 6134)
+// From the reports of 26-06: daylight p. 15, CO2 p. 12, heated area MAT report p. 23 (GFA is 6134). BE18 and hours above 27 °C are left empty, the video fills them in by a click.
+// energy_ida, heating_load and time_in_category_2 are not in the report text: plausible values for the recording only, nothing of the recording mode is saved.
+const VIDEO_INPUTS = { building_use: 'other buildings', energy_ida: '38.6', daylight_sda300: 'met', heating_load: '24', time_in_category_2: '97', co2_max: '1219', floor_area: '4645' };
 const isMEP = (m) => m.elements.filter((e) => e.seg).length >= 10;
 async function addFile(name, size, getBuffer) {
   const f = { name, size, kind: /\.ifc$/i.test(name) ? 'ifc' : /\.pdf$/i.test(name) ? 'pdf' : 'other', status: 'reading' };
@@ -82,8 +84,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=6b9adf6');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=6b9adf6', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=ab77cdf');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=ab77cdf', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -93,7 +95,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=6b9adf6'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=ab77cdf'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -570,4 +572,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = '6b9adf6';
+window.SERVICES_VERSION = 'ab77cdf';
