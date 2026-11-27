@@ -1,10 +1,10 @@
 // Services, app shell: four pages (Files, Data, Images, Export). Reading is in core.js, values and
 // export in data.js, images in pictos.js, the document in doc.js. Only this file touches the DOM.
 import * as WebIFC from './vendor/web-ifc-api.js';
-import { analyze, fmt } from './core.js?v=017a2d8';
-import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=017a2d8';
-import { FIELDS, pictograms } from './pictos.js?v=017a2d8';
-import { DOC_CSS, pages } from './doc.js?v=017a2d8';
+import { analyze, fmt } from './core.js?v=ac823bb';
+import { REQUIRED, OPTIONAL, BUILDING_USE, buildValues, exportRows, toCSV, toJSON, emptyState, display, isEmpty, parse, storeyName } from './data.js?v=ac823bb';
+import { FIELDS, pictograms } from './pictos.js?v=ac823bb';
+import { DOC_CSS, pages } from './doc.js?v=ac823bb';
 import { zipSync, strToU8 } from './vendor/fflate.js';
 
 const $ = (s) => document.querySelector(s);
@@ -84,8 +84,8 @@ let pdfjs = null;
 async function readText(f, data) {
   try {
     if (!pdfjs) {
-      pdfjs = await import('./vendor/pdf.min.mjs?v=017a2d8');
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=017a2d8', import.meta.url).href;
+      pdfjs = await import('./vendor/pdf.min.mjs?v=ac823bb');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs?v=ac823bb', import.meta.url).href;
     }
     const doc = await pdfjs.getDocument({ data }).promise, pages = [];
     f.doc = doc;
@@ -95,7 +95,7 @@ async function readText(f, data) {
       pages.push(c.items.map((x) => x.str + (x.hasEOL ? ' ' : '')).join(' ').replace(/\s+/g, ' '));
     }
     f.pages = pages;
-    try { const { suggestAll } = await import('./suggest.js?v=017a2d8'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
+    try { const { suggestAll } = await import('./suggest.js?v=ac823bb'); f.sugg = suggestAll(pages); } catch (e) { console.error(e); }
     if (location.hash.slice(1) === 'data') render();
   } catch (e) { console.error(e); f.pages = []; if (!f.doc) f.doc = false; if (S.report === f) view(); }
   if (S.report === f) hits();
@@ -462,30 +462,43 @@ function save_(blob, name) {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
-// The PDF is made in the browser: html2canvas draws each page at twice the size, jsPDF puts them on 16:9 pages.
-// Both are loaded only when needed. The pages are images in the PDF, the text cannot be selected.
+// The PDF is made in the browser. Each page is drawn as an SVG image onto a canvas at twice the size, jsPDF puts the images on 16:9 pages.
+// The browser draws it itself, so it takes a second. Where a browser does not allow that (older Safari), html2canvas draws the page, slower.
+// The libraries are loaded only when needed. The pages are images in the PDF, the text cannot be selected.
 const script = (src) => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => no(new Error('could not load ' + src)); document.head.appendChild(s); });
-let pdfLibs = null;
-async function makePDF() {
-  pdfLibs = pdfLibs || Promise.all([script('./vendor/html2canvas.min.js'), script('./vendor/jspdf.umd.min.js')]);
-  await pdfLibs;
+const libs = {};
+const lib = (n) => (libs[n] = libs[n] || script(`./vendor/${n}`));
+async function pageImage(html) {
+  const t = document.createElement('template'); t.innerHTML = html;
+  const body = [...t.content.childNodes].map((n) => new XMLSerializer().serializeToString(n)).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><foreignObject x="0" y="0" width="1280" height="720"><div xmlns="http://www.w3.org/1999/xhtml" class="doc"><style><![CDATA[${DOC_CSS} .doc .sheet { margin: 0; }]]></style>${body}</div></foreignObject></svg>`;
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  await img.decode();
+  const c = document.createElement('canvas'); c.width = 2560; c.height = 1440;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 2560, 1440); g.drawImage(img, 0, 0, 2560, 1440);
+  return c.toDataURL('image/jpeg', 0.92); // throws where the browser does not allow it
+}
+async function pageImageSlow(html) {
+  await lib('html2canvas.min.js');
   const box = document.createElement('div');
   box.className = 'doc'; box.style.cssText = 'position:fixed;left:-20000px;top:0;width:1280px';
-  box.innerHTML = pages(docCtx()).join('');
-  document.body.appendChild(box);
-  try {
-    if (document.fonts) await document.fonts.ready;
-    const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'px', format: [1280, 720], hotfixes: ['px_scaling'], compress: true });
-    const sheets = [...box.querySelectorAll('.sheet')];
-    for (let i = 0; i < sheets.length; i++) {
-      sheets[i].style.margin = '0';
-      const c = await window.html2canvas(sheets[i], { scale: 2, backgroundColor: '#ffffff', logging: false, width: 1280, height: 720 });
-      if (i) pdf.addPage([1280, 720], 'landscape');
-      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 1280, 720);
-    }
-    pdf.setProperties({ title: `services-${S.model.id}` });
-    return pdf.output('arraybuffer');
-  } finally { box.remove(); }
+  box.innerHTML = html; document.body.appendChild(box);
+  try { const sh = box.querySelector('.sheet'); sh.style.margin = '0'; return (await window.html2canvas(sh, { scale: 2, backgroundColor: '#ffffff', logging: false })).toDataURL('image/jpeg', 0.92); }
+  finally { box.remove(); }
+}
+async function makePDF() {
+  await lib('jspdf.umd.min.js');
+  const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'px', format: [1280, 720], hotfixes: ['px_scaling'], compress: true });
+  const list = pages(docCtx());
+  for (let i = 0; i < list.length; i++) {
+    let jpg;
+    try { jpg = await pageImage(list[i]); } catch (e) { console.warn('PDF page drawn the slow way', e); jpg = await pageImageSlow(list[i]); }
+    if (i) pdf.addPage([1280, 720], 'landscape');
+    pdf.addImage(jpg, 'JPEG', 0, 0, 1280, 720);
+  }
+  pdf.setProperties({ title: `services-${S.model.id}` });
+  return pdf.output('arraybuffer');
 }
 async function downloadPDF() { save_(new Blob([await makePDF()], { type: 'application/pdf' }), `services-${S.model.id}.pdf`); }
 // buttons that take a moment show it and stay disabled meanwhile
@@ -597,4 +610,4 @@ if (VIDEO) {
 }
 window.SERVICES = S;
 
-window.SERVICES_VERSION = '017a2d8';
+window.SERVICES_VERSION = 'ac823bb';

@@ -17,7 +17,7 @@ Everything runs on your own computer. No file is uploaded, there is no server an
 1. **Files.** Drop the files of the project: the MEP model (IFC) and the MEP report (PDF). You can drop the other models and reports too. The app finds the model with the building services by its content, not by its name. It shows what it read and checks if the model has what the values need.
 2. **Data.** Grey fields are yours to fill in from the report. Under a field the app shows the values it found in the report, for example `Report 40.9 p. 14`. A click fills the field and shows the place in the report. The x empties the field again. Use **Open the report next to the fields** to read and search the report while you fill in. Values read from the model are plain text. You can correct them with **Edit**, the model value stays visible.
 3. **Images.** Choose colour or black, storeys shown or hidden, all elements or main runs only.
-4. **Export.** Choose the files and click **Download** for one ZIP. **Download PDF** gives the document alone. The PDF is named after the project, for example `services-26-06.pdf`. Its pages are drawn as images at twice the size, so the text in the PDF cannot be selected.
+4. **Export.** Choose the files and click **Download** for one ZIP. **Download PDF** gives the document alone. The PDF is named after the project, for example `services-26-06.pdf`. It is made in about a second. Its pages are drawn as images at twice the size, so the text in the PDF cannot be selected.
 
 Inputs and corrections are kept in your browser for each project, so you can close the page and go on later.
 
@@ -80,7 +80,7 @@ Then open http://localhost:8766 in your browser.
 
 - `index.html` the page and its styles. `app.js` the four pages, the report next to the fields and the download.
 - `core.js` reads the IFC. `data.js` the values and the CSV and JSON export. `pictos.js` the images as SVG. `doc.js` the three document pages. `suggest.js` the values from the report.
-- `vendor/` the libraries, copied in so the app needs no network: web-ifc (MPL 2.0), pdf.js 4.10.38 (Apache 2.0), fflate (MIT), jsPDF 4.2.1 (MIT) and html2canvas 1.4.1 (MIT) for the PDF.
+- `vendor/` the libraries, copied in so the app needs no network: web-ifc (MPL 2.0), pdf.js 4.10.38 (Apache 2.0), fflate (MIT), jsPDF 4.2.1 (MIT) for the PDF and html2canvas 1.4.1 (MIT), used only where a browser does not allow drawing the pages itself.
 
 ## Who made it
 
